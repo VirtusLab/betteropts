@@ -473,3 +473,45 @@ _bo_apply_defaults() {
     fi
   done
 }
+
+# ---------------------------------------------------------------------------
+# Variable Population
+#
+# Writes the final values into ordinary (never exported) shell variables in
+# the caller's scope, using each declaration's var= name (defaulting to the
+# declared name). Every assignment goes through `declare -g`: a plain
+# `varname=value` would instead silently rebind one of this function's own
+# local loop variables if a CLI author happened to name their option/argument
+# the same thing (e.g. `option name ...` colliding with a local var "name").
+# ---------------------------------------------------------------------------
+
+_bo_populate() {
+  local name var cardinality i
+
+  for name in "${_bo_flags[@]}"; do
+    var="$(_bo_meta_get "$name" var)"
+    if [[ -n "${_bo_provided[$name]:-}" ]]; then
+      declare -g "$var=true"
+    else
+      declare -g "$var=false"
+    fi
+  done
+
+  for name in "${_bo_options[@]}"; do
+    var="$(_bo_meta_get "$name" var)"
+    declare -g "$var=${_bo_raw[$name]:-}"
+  done
+
+  for name in "${_bo_arguments[@]}"; do
+    var="$(_bo_meta_get "$name" var)"
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "variadic" ]]; then
+      declare -ga "$var"
+      for i in "${!_bo_variadic_values[@]}"; do
+        declare -g "$var[$i]=${_bo_variadic_values[$i]}"
+      done
+    else
+      declare -g "$var=${_bo_raw[$name]:-}"
+    fi
+  done
+}

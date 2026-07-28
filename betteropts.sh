@@ -607,3 +607,132 @@ _bo_help_text() {
 
   printf '%s' "$out"
 }
+
+# ---------------------------------------------------------------------------
+# Completion
+#
+# Wire protocol (internal; --__complete "must not appear in help output"):
+#
+#   <command> --__complete -- word1 word2 ... wordN
+#
+# wordN (possibly empty) is the partial word being completed; word1..N-1 are
+# the already-typed words before it. Candidates are printed one per line to
+# stdout. This mirrors the shape real-world Bash-completion-over-a-hidden-flag
+# tools use (e.g. argc's `--argc-compgen`, cobra's `__complete`): a single
+# generic shell-side function (_bo_bash_completion below) that knows nothing
+# about any particular command's schema, and delegates entirely to invoking
+# that command with the hidden flag.
+# ---------------------------------------------------------------------------
+
+_bo_complete_choice() {
+  local partial="$1" choices="$2"
+  local IFS=','
+  local -a list=($choices)
+  local c
+  for c in "${list[@]}"; do
+    [[ "$c" == "$partial"* ]] && printf '%s\n' "$c"
+  done
+  return 0
+}
+
+_bo_complete_value() {
+  local name="$1" partial="$2" type
+  type="$(_bo_meta_get "$name" type)"
+  case "$type" in
+    choice) _bo_complete_choice "$partial" "$(_bo_meta_get "$name" choices)" ;;
+    file) compgen -f -- "$partial" || true ;;
+    directory) compgen -d -- "$partial" || true ;;
+    *) ;;
+  esac
+  return 0
+}
+
+_bo_complete_option_names() {
+  local partial="$1" name long short
+  for name in "${_bo_flags_and_options[@]}"; do
+    long="$(_bo_meta_get "$name" long)"
+    short="$(_bo_meta_get "$name" short)"
+    [[ -n "$long" && "$long" == "$partial"* ]] && printf '%s\n' "$long"
+    [[ -n "$short" && "$short" == "$partial"* ]] && printf '%s\n' "$short"
+  done
+  [[ "--help" == "$partial"* ]] && printf '%s\n' "--help"
+  [[ "-h" == "$partial"* ]] && printf '%s\n' "-h"
+  return 0
+}
+
+# Resolves what `partial` (the last word) is completing: an option's value,
+# an option name, or a positional argument's value - by replaying the
+# already-typed words (a simplified re-walk of _bo_parse's logic, since the
+# in-progress partial word makes the real parser's error paths the wrong
+# tool here).
+_bo_complete() {
+  if [[ "${1:-}" == "--" ]]; then
+    shift
+  fi
+  local words=("$@")
+  local n=${#words[@]}
+  (( n == 0 )) && return 0
+
+  local partial="${words[$((n - 1))]}"
+  local i=0 awaiting_name="" positional_count=0
+
+  while (( i < n - 1 )); do
+    local tok="${words[$i]}" name=""
+    if [[ "$tok" == --*=* ]]; then
+      i=$((i + 1))
+      continue
+    elif [[ "$tok" == --* ]]; then
+      name="$(_bo_find_by_long "$tok")" || true
+    elif [[ "$tok" == -?* ]]; then
+      name="$(_bo_find_by_short "$tok")" || true
+    fi
+
+    if [[ -n "$name" ]] && ! _bo_is_flag "$name"; then
+      if (( i + 1 < n - 1 )); then
+        i=$((i + 2))
+      else
+        awaiting_name="$name"
+        i=$((i + 1))
+      fi
+    elif [[ -n "$name" ]]; then
+      i=$((i + 1))
+    else
+      positional_count=$((positional_count + 1))
+      i=$((i + 1))
+    fi
+  done
+
+  if [[ -n "$awaiting_name" ]]; then
+    _bo_complete_value "$awaiting_name" "$partial"
+    return 0
+  fi
+
+  if [[ "$partial" == -* ]]; then
+    _bo_complete_option_names "$partial"
+    return 0
+  fi
+
+  local arg_name idx=0 cardinality
+  for arg_name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$arg_name" cardinality)"
+    if [[ "$cardinality" == "variadic" || "$idx" -eq "$positional_count" ]]; then
+      _bo_complete_value "$arg_name" "$partial"
+      return 0
+    fi
+    idx=$((idx + 1))
+  done
+
+  return 0
+}
+
+# Generic completion function for `complete -F _bo_bash_completion <cmd>...`.
+# Knows nothing about any command's schema; delegates to that command's own
+# --__complete. Register with -o nosort so candidate order (e.g. a choice
+# list's declared order) is preserved instead of being alphabetized.
+_bo_bash_completion() {
+  local cmd="${COMP_WORDS[0]}"
+  local -a words=("${COMP_WORDS[@]:1:COMP_CWORD}")
+  local IFS=$'\n'
+  COMPREPLY=($("$cmd" --__complete -- "${words[@]}" 2>/dev/null))
+  IFS=$' \t\n'
+}

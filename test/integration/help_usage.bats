@@ -75,3 +75,15 @@ Options
   run "$FIXTURE" --usage
   assert_equal "$status" 0
 }
+
+@test "--help wins even alongside an otherwise-invalid command line" {
+  run "$FIXTURE" --this-is-not-a-real-option --help
+  assert_success
+  assert_output --partial "Usage:"
+}
+
+@test "-- suppresses built-in command detection for tokens after it" {
+  run "$FIXTURE" --output /tmp -- --help
+  assert_failure
+  refute_output --partial "Usage:"
+}

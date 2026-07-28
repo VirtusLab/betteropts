@@ -413,8 +413,8 @@ _bo_assign_positionals() {
 
 _bo_choice_matches() {
   local value="$1" choices="$2"
-  local IFS=','
-  local -a list=($choices)
+  local -a list
+  IFS=',' read -ra list <<< "$choices"
   local c
   for c in "${list[@]}"; do
     [[ "$c" == "$value" ]] && return 0
@@ -554,7 +554,7 @@ _bo_populate() {
     if [[ "$cardinality" == "variadic" ]]; then
       declare -ga "$var"
       for i in "${!_bo_variadic_values[@]}"; do
-        declare -g "$var[$i]=${_bo_variadic_values[$i]}"
+        declare -g "${var}[$i]=${_bo_variadic_values[$i]}"
       done
     else
       declare -g "$var=${_bo_raw[$name]:-}"
@@ -669,8 +669,8 @@ _bo_help_text() {
 
 _bo_complete_choice() {
   local partial="$1" choices="$2"
-  local IFS=','
-  local -a list=($choices)
+  local -a list
+  IFS=',' read -ra list <<< "$choices"
   local c
   for c in "${list[@]}"; do
     [[ "$c" == "$partial"* ]] && printf '%s\n' "$c"
@@ -775,7 +775,5 @@ _bo_complete() {
 _bo_bash_completion() {
   local cmd="${COMP_WORDS[0]}"
   local -a words=("${COMP_WORDS[@]:1:COMP_CWORD}")
-  local IFS=$'\n'
-  COMPREPLY=($("$cmd" --__complete -- "${words[@]}" 2>/dev/null))
-  IFS=$' \t\n'
+  mapfile -t COMPREPLY < <("$cmd" --__complete -- "${words[@]}" 2>/dev/null)
 }

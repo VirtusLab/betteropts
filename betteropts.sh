@@ -356,3 +356,120 @@ _bo_assign_positionals() {
 
   return 0
 }
+
+# ---------------------------------------------------------------------------
+# Validation
+#
+# Checks required options/arguments are present and that every provided raw
+# value matches its declared type. Runs after parsing and before defaults are
+# applied (a default is trusted as-is; it is never itself validated).
+# ---------------------------------------------------------------------------
+
+_bo_choice_matches() {
+  local value="$1" choices="$2"
+  local IFS=','
+  local -a list=($choices)
+  local c
+  for c in "${list[@]}"; do
+    [[ "$c" == "$value" ]] && return 0
+  done
+  return 1
+}
+
+# $1 = display identifier, $2 = raw value, $3 = declared type, $4 = choices csv
+_bo_validate_type() {
+  local ident="$1" value="$2" type="$3" choices="$4"
+  case "$type" in
+    integer)
+      [[ "$value" =~ ^-?[0-9]+$ ]] || {
+        _bo_die_invalid_value "$ident" "$value" "must be an integer"
+        return 1
+      }
+      ;;
+    float)
+      [[ "$value" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || {
+        _bo_die_invalid_value "$ident" "$value" "must be a number"
+        return 1
+      }
+      ;;
+    file)
+      [[ -f "$value" ]] || {
+        _bo_die_invalid_value "$ident" "$value" "no such file"
+        return 1
+      }
+      ;;
+    directory)
+      [[ -d "$value" ]] || {
+        _bo_die_invalid_value "$ident" "$value" "no such directory"
+        return 1
+      }
+      ;;
+    choice)
+      _bo_choice_matches "$value" "$choices" || {
+        _bo_die_invalid_value "$ident" "$value" "choices: ${choices//,/, }"
+        return 1
+      }
+      ;;
+    *)
+      ;;
+  esac
+  return 0
+}
+
+_bo_validate() {
+  local name cardinality
+
+  for name in "${_bo_options[@]}"; do
+    if [[ "$(_bo_meta_get "$name" required)" == "true" && -z "${_bo_provided[$name]:-}" ]]; then
+      _bo_die_missing_required_option "$name"
+      return 1
+    fi
+  done
+
+  for name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "required" && -z "${_bo_raw[$name]:-}" ]]; then
+      _bo_die_missing_required_argument "$name"
+      return 1
+    fi
+  done
+
+  for name in "${_bo_options[@]}"; do
+    if [[ -n "${_bo_provided[$name]:-}" ]]; then
+      _bo_validate_type "$(_bo_display_flag "$name")" "${_bo_raw[$name]}" \
+        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+    fi
+  done
+
+  for name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "variadic" ]]; then
+      local value
+      for value in "${_bo_variadic_values[@]}"; do
+        _bo_validate_type "$(_bo_display_argument "$name")" "$value" \
+          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+      done
+    elif [[ -n "${_bo_raw[$name]:-}" ]]; then
+      _bo_validate_type "$(_bo_display_argument "$name")" "${_bo_raw[$name]}" \
+        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+    fi
+  done
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Defaults
+#
+# Applied after validation and before variable population: an omitted
+# option that declares a default is filled in with that default value.
+# ---------------------------------------------------------------------------
+
+_bo_apply_defaults() {
+  local name
+  for name in "${_bo_options[@]}"; do
+    if [[ -z "${_bo_provided[$name]:-}" ]] && _bo_meta_has "$name" default; then
+      _bo_raw[$name]="$(_bo_meta_get "$name" default)"
+    fi
+  done
+}

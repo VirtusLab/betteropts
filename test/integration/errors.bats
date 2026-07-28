@@ -23,7 +23,7 @@ Use --help for usage."
 }
 
 @test "unknown option error goes to stderr" {
-  "$FIXTURE" --verboes --output "$OUT_DIR" "$SRC_DIR" 1>/dev/null 2>"$BATS_TEST_TMPDIR/stderr"
+  "$FIXTURE" --verboes --output "$OUT_DIR" "$SRC_DIR" 1>/dev/null 2>"$BATS_TEST_TMPDIR/stderr" || true
   assert [ -s "$BATS_TEST_TMPDIR/stderr" ]
 }
 

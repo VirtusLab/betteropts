@@ -8,6 +8,49 @@
 # Everything else (anything prefixed `_bo_`) is a private implementation detail.
 
 # ---------------------------------------------------------------------------
+# Public API
+#
+# Runs the full execution lifecycle from DESIGN.MD: finalize the schema,
+# handle built-in commands (-h/--help, --usage, --__complete), parse,
+# validate, apply defaults, populate variables, return. Every other
+# function in this file returns non-zero on failure instead of exiting, so
+# this is the only place that calls `exit`.
+# ---------------------------------------------------------------------------
+
+betteropts_parse() {
+  _bo_command_name="$(basename "$0")"
+
+  _bo_finalize_schema || exit 1
+
+  local tok
+  for tok in "$@"; do
+    [[ "$tok" == "--" ]] && break
+    case "$tok" in
+      -h | --help)
+        printf '%s\n' "$(_bo_help_text)"
+        exit 0
+        ;;
+      --usage)
+        printf '%s\n' "$(_bo_usage_text)"
+        exit 0
+        ;;
+    esac
+  done
+
+  if [[ "${1:-}" == "--__complete" ]]; then
+    shift
+    _bo_complete "$@"
+    exit 0
+  fi
+
+  _bo_parse "$@" || exit 1
+  _bo_assign_positionals || exit 1
+  _bo_validate || exit 1
+  _bo_apply_defaults
+  _bo_populate
+}
+
+# ---------------------------------------------------------------------------
 # Schema
 #
 # The CLI schema is the single source of truth consumed by the parser,

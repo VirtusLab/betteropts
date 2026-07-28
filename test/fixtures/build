@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Build a project"
+
+description "
+Compile a project and write the resulting artifacts.
+
+Supports incremental and parallel builds.
+"
+
+flag verbose -v --verbose \
+    help="Enable verbose logging"
+
+flag force -f --force \
+    help="Overwrite existing output"
+
+option output -o --output PATH \
+    required \
+    type=directory \
+    help="Output directory"
+
+option jobs -j --jobs N \
+    default=4 \
+    type=integer \
+    help="Worker count"
+
+argument source required \
+    type=directory \
+    help="Source directory"
+
+argument destination optional \
+    type=directory \
+    help="Destination directory"
+
+betteropts_parse "$@"
+
+echo "verbose=$verbose"
+echo "force=$force"
+echo "output=$output"
+echo "jobs=$jobs"
+echo "source=$source"
+echo "destination=${destination:-}"

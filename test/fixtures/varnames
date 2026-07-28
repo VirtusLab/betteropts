@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Variable name override sample"
+
+option output -o --output PATH \
+    var=build_dir \
+    help="Output directory"
+
+flag quiet --quiet \
+    help="Suppress output"
+
+argument source required \
+    var=input_dir \
+    help="Source directory"
+
+betteropts_parse "$@"
+
+echo "build_dir=$build_dir"
+echo "quiet=$quiet"
+echo "input_dir=$input_dir"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Type sample"
+
+option mode -m --mode MODE \
+    type=choice \
+    choices=fast,slow,auto \
+    default=fast \
+    help="Run mode"
+
+option count -c --count N \
+    type=integer \
+    help="Count"
+
+option ratio --ratio F \
+    type=float \
+    help="Ratio"
+
+option config --config FILE \
+    type=file \
+    help="Config file"
+
+argument files variadic \
+    type=string \
+    help="Files"
+
+betteropts_parse "$@"
+
+echo "mode=$mode"
+echo "count=${count:-}"
+echo "ratio=${ratio:-}"
+echo "config=${config:-}"
+echo "files=${files[*]:-}"

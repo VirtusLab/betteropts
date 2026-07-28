@@ -96,6 +96,7 @@ flag() {
   local name="$1"
   shift
   _bo_declare flag "$name" "$@"
+  _bo_meta_set "$name" kind "flag"
   _bo_flags+=("$name")
 }
 
@@ -103,6 +104,7 @@ option() {
   local name="$1"
   shift
   _bo_declare option "$name" "$@"
+  _bo_meta_set "$name" kind "option"
   _bo_options+=("$name")
 }
 
@@ -110,6 +112,7 @@ argument() {
   local name="$1"
   shift
   _bo_declare argument "$name" "$@"
+  _bo_meta_set "$name" kind "argument"
   _bo_arguments+=("$name")
 }
 
@@ -132,6 +135,224 @@ _bo_finalize_schema() {
       fi
     fi
   done
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Error Handling
+#
+# Internal functions never call `exit`; they print to stderr and return
+# non-zero. Only the public betteropts_parse translates a failure into a
+# process exit. This keeps every internal function unit-testable in-process.
+# ---------------------------------------------------------------------------
+
+# Prints "<label>:\n\n<body>" optionally followed by a blank line and a
+# trailer, matching every error format shown in DESIGN.MD.
+_bo_print_error() {
+  local label="$1" body="$2" trailer="${3:-}"
+  printf '%s:\n\n%s\n' "$label" "$body" >&2
+  if [[ -n "$trailer" ]]; then
+    printf '\n%s\n' "$trailer" >&2
+  fi
+}
+
+# The flag/option identifier shown in messages: its long form, or its short
+# form when no long form was declared.
+_bo_display_flag() {
+  local name="$1" long short
+  long="$(_bo_meta_get "$name" long)"
+  short="$(_bo_meta_get "$name" short)"
+  if [[ -n "$long" ]]; then
+    printf '%s' "$long"
+  else
+    printf '%s' "$short"
+  fi
+}
+
+# The argument identifier shown in messages: its declared name, uppercased.
+_bo_display_argument() {
+  local name="$1"
+  printf '%s' "${name^^}"
+}
+
+_bo_die_unknown_option() {
+  _bo_print_error "Unknown option" "$1" "Use --help for usage."
+}
+
+_bo_die_missing_value() {
+  _bo_print_error "Missing value" "$(_bo_display_flag "$1")"
+}
+
+_bo_die_unexpected_argument() {
+  _bo_print_error "Unexpected argument" "$1"
+}
+
+_bo_die_missing_required_argument() {
+  _bo_print_error "Missing required argument" "$(_bo_display_argument "$1")"
+}
+
+_bo_die_missing_required_option() {
+  _bo_print_error "Missing required option" "$(_bo_display_flag "$1")"
+}
+
+# $1 = display identifier (a flag form or an uppercased argument name)
+# $2 = the offending raw value
+# $3 = human-readable reason, e.g. "must be an integer"
+_bo_die_invalid_value() {
+  _bo_print_error "Invalid value" "$1 $2 ($3)"
+}
+
+# ---------------------------------------------------------------------------
+# Parser
+#
+# Converts argv into raw (unvalidated) values: which flags/options were
+# provided and their raw string values, plus the leftover positional
+# tokens. Positional-to-argument assignment is a second pass
+# (_bo_assign_positionals) since it depends on the full token list.
+# ---------------------------------------------------------------------------
+
+declare -gA _bo_provided=()
+declare -gA _bo_raw=()
+declare -ga _bo_positional_tokens=()
+declare -ga _bo_variadic_values=()
+
+_bo_is_flag() {
+  [[ "$(_bo_meta_get "$1" kind)" == "flag" ]]
+}
+
+_bo_find_by_long() {
+  local tok="$1" name
+  for name in "${_bo_flags[@]}" "${_bo_options[@]}"; do
+    if [[ "$(_bo_meta_get "$name" long)" == "$tok" ]]; then
+      printf '%s' "$name"
+      return 0
+    fi
+  done
+  return 1
+}
+
+_bo_find_by_short() {
+  local tok="$1" name
+  for name in "${_bo_flags[@]}" "${_bo_options[@]}"; do
+    if [[ "$(_bo_meta_get "$name" short)" == "$tok" ]]; then
+      printf '%s' "$name"
+      return 0
+    fi
+  done
+  return 1
+}
+
+_bo_parse() {
+  _bo_provided=()
+  _bo_raw=()
+  _bo_positional_tokens=()
+
+  local args=("$@") after_dashdash=false
+  local i=0 n=${#args[@]}
+
+  while (( i < n )); do
+    local tok="${args[$i]}"
+
+    if [[ "$after_dashdash" == "true" ]]; then
+      _bo_positional_tokens+=("$tok")
+      i=$((i + 1))
+      continue
+    fi
+
+    if [[ "$tok" == "--" ]]; then
+      after_dashdash=true
+      i=$((i + 1))
+      continue
+    fi
+
+    if [[ "$tok" == --*=* ]]; then
+      local long="${tok%%=*}" value="${tok#*=}" name
+      if ! name="$(_bo_find_by_long "$long")" || _bo_is_flag "$name"; then
+        _bo_die_unknown_option "$tok"
+        return 1
+      fi
+      _bo_provided[$name]="true"
+      _bo_raw[$name]="$value"
+      i=$((i + 1))
+      continue
+    fi
+
+    if [[ "$tok" == --* ]]; then
+      local name
+      if ! name="$(_bo_find_by_long "$tok")"; then
+        _bo_die_unknown_option "$tok"
+        return 1
+      fi
+      if _bo_is_flag "$name"; then
+        _bo_provided[$name]="true"
+        i=$((i + 1))
+      else
+        if (( i + 1 >= n )); then
+          _bo_die_missing_value "$name"
+          return 1
+        fi
+        _bo_provided[$name]="true"
+        _bo_raw[$name]="${args[$((i + 1))]}"
+        i=$((i + 2))
+      fi
+      continue
+    fi
+
+    if [[ "$tok" == -?* ]]; then
+      local name
+      if ! name="$(_bo_find_by_short "$tok")"; then
+        _bo_die_unknown_option "$tok"
+        return 1
+      fi
+      if _bo_is_flag "$name"; then
+        _bo_provided[$name]="true"
+        i=$((i + 1))
+      else
+        if (( i + 1 >= n )); then
+          _bo_die_missing_value "$name"
+          return 1
+        fi
+        _bo_provided[$name]="true"
+        _bo_raw[$name]="${args[$((i + 1))]}"
+        i=$((i + 2))
+      fi
+      continue
+    fi
+
+    _bo_positional_tokens+=("$tok")
+    i=$((i + 1))
+  done
+
+  return 0
+}
+
+# Maps the leftover positional tokens onto declared argument slots, in
+# declaration order. A trailing variadic argument consumes every remaining
+# token; otherwise, more tokens than declared slots is an error.
+_bo_assign_positionals() {
+  _bo_variadic_values=()
+
+  local idx=0 total=${#_bo_positional_tokens[@]}
+  local name cardinality
+
+  for name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "variadic" ]]; then
+      while (( idx < total )); do
+        _bo_variadic_values+=("${_bo_positional_tokens[$idx]}")
+        idx=$((idx + 1))
+      done
+    elif (( idx < total )); then
+      _bo_raw[$name]="${_bo_positional_tokens[$idx]}"
+      idx=$((idx + 1))
+    fi
+  done
+
+  if (( idx < total )); then
+    _bo_die_unexpected_argument "${_bo_positional_tokens[$idx]}"
+    return 1
+  fi
 
   return 0
 }

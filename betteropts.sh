@@ -20,6 +20,7 @@ _bo_summary=""
 _bo_description=""
 _bo_flags=()
 _bo_options=()
+_bo_flags_and_options=()
 _bo_arguments=()
 declare -gA _bo_meta=()
 
@@ -98,6 +99,7 @@ flag() {
   _bo_declare flag "$name" "$@"
   _bo_meta_set "$name" kind "flag"
   _bo_flags+=("$name")
+  _bo_flags_and_options+=("$name")
 }
 
 option() {
@@ -106,6 +108,7 @@ option() {
   _bo_declare option "$name" "$@"
   _bo_meta_set "$name" kind "option"
   _bo_options+=("$name")
+  _bo_flags_and_options+=("$name")
 }
 
 argument() {
@@ -223,7 +226,7 @@ _bo_is_flag() {
 
 _bo_find_by_long() {
   local tok="$1" name
-  for name in "${_bo_flags[@]}" "${_bo_options[@]}"; do
+  for name in "${_bo_flags_and_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" long)" == "$tok" ]]; then
       printf '%s' "$name"
       return 0
@@ -234,7 +237,7 @@ _bo_find_by_long() {
 
 _bo_find_by_short() {
   local tok="$1" name
-  for name in "${_bo_flags[@]}" "${_bo_options[@]}"; do
+  for name in "${_bo_flags_and_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" short)" == "$tok" ]]; then
       printf '%s' "$name"
       return 0
@@ -514,4 +517,93 @@ _bo_populate() {
       declare -g "$var=${_bo_raw[$name]:-}"
     fi
   done
+}
+
+# ---------------------------------------------------------------------------
+# Usage Generator
+# ---------------------------------------------------------------------------
+
+# Set by betteropts_parse from $0; overridable (e.g. by tests) before calling
+# _bo_usage_line/_bo_usage_text/_bo_help_text directly.
+_bo_command_name="${_bo_command_name:-}"
+
+_bo_usage_line() {
+  local line="$_bo_command_name [OPTIONS]" name cardinality
+  for name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    case "$cardinality" in
+      required) line+=" $(_bo_display_argument "$name")" ;;
+      optional) line+=" [$(_bo_display_argument "$name")]" ;;
+      variadic) line+=" [$(_bo_display_argument "$name")...]" ;;
+    esac
+  done
+  printf '%s' "$line"
+}
+
+_bo_usage_text() {
+  printf '%s\n\nUsage:\n\n%s' "$_bo_summary" "$(_bo_usage_line)"
+}
+
+# ---------------------------------------------------------------------------
+# Help Generator
+#
+# --usage and --__complete are intentionally never listed here, matching
+# DESIGN.MD's worked Help Output example (only -h/--help appears).
+# ---------------------------------------------------------------------------
+
+# Strips exactly the leading and trailing blank line a description's
+# multi-line string literal carries (from `description "\n...\n"`), while
+# preserving any blank lines in the middle of the text.
+_bo_trim_description() {
+  local text="$1"
+  text="${text#$'\n'}"
+  while [[ "$text" == *$'\n' ]]; do
+    text="${text%$'\n'}"
+  done
+  printf '%s' "$text"
+}
+
+# The label shown in the Options section: "-x, --xxx", "--xxx", or "-x"
+# alone, plus a trailing metavar for options.
+_bo_option_label() {
+  local name="$1" short long metavar label
+  short="$(_bo_meta_get "$name" short)"
+  long="$(_bo_meta_get "$name" long)"
+  if [[ -n "$short" && -n "$long" ]]; then
+    label="$short, $long"
+  elif [[ -n "$long" ]]; then
+    label="$long"
+  else
+    label="$short"
+  fi
+  if [[ "$(_bo_meta_get "$name" kind)" == "option" ]]; then
+    metavar="$(_bo_meta_get "$name" metavar)"
+    [[ -n "$metavar" ]] && label+=" $metavar"
+  fi
+  printf '%s' "$label"
+}
+
+_bo_help_text() {
+  local out="$_bo_summary" name
+
+  if [[ -n "$_bo_description" ]]; then
+    out+=$'\n\n'"$(_bo_trim_description "$_bo_description")"
+  fi
+
+  out+=$'\n\n'"Usage:"$'\n\n'"$(_bo_usage_line)"
+
+  if [[ ${#_bo_arguments[@]} -gt 0 ]]; then
+    out+=$'\n\n'"Arguments"
+    for name in "${_bo_arguments[@]}"; do
+      out+=$'\n\n'"$(_bo_display_argument "$name")"$'\n'"    $(_bo_meta_get "$name" help)"
+    done
+  fi
+
+  out+=$'\n\n'"Options"
+  for name in "${_bo_flags_and_options[@]}"; do
+    out+=$'\n\n'"$(_bo_option_label "$name")"$'\n'"    $(_bo_meta_get "$name" help)"
+  done
+  out+=$'\n\n'"-h, --help"$'\n'"    Show this help"
+
+  printf '%s' "$out"
 }

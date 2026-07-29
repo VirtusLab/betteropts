@@ -177,6 +177,44 @@ FILES notanumber (must be an integer)"
   assert_equal "${_bo_raw[output]:-}" ""
 }
 
+@test "a multi option validates each repeated value independently" {
+  option count -c --count N type=integer multi
+  _bo_parse --count 1 --count 2 --count 3
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "one invalid value among several multi values fails validation, identifying it" {
+  option count -c --count N type=integer multi
+  _bo_parse --count 1 --count notanumber --count 3
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Invalid value:
+
+--count notanumber (must be an integer)"
+}
+
+@test "required + multi with zero occurrences is a Missing required option error" {
+  option topic -t --topic VALUE required multi
+  _bo_parse
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Missing required option:
+
+--topic"
+}
+
+@test "required + multi with at least one occurrence passes validation" {
+  option topic -t --topic VALUE required multi
+  _bo_parse --topic conflicts
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
 @test "an optional argument's default is not type-checked" {
   argument count optional type=integer default=notanumber
   _bo_parse

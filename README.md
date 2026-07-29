@@ -92,7 +92,7 @@ flag verbose -v --verbose help="Enable verbose logging"
 flag quiet --quiet help="Suppress output"   # long-only is fine
 ```
 
-### `option <name> [-x] [--xxx] METAVAR [required] [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
+### `option <name> [-x] [--xxx] METAVAR [required] [type=T] [choices=a,b,c] [default=D] [multi] [var=name] [help="..."]`
 
 A flag that takes a value. `METAVAR` (e.g. `PATH`, `N`) is the placeholder
 name shown in `--help`/usage. Accepts:
@@ -110,6 +110,25 @@ supported (per DESIGN.MD, to keep the parser simple).
 option output -o --output PATH required type=directory help="Output directory"
 option jobs -j --jobs N default=4 type=integer help="Worker count"
 ```
+
+Add `multi` to make the option repeatable: each occurrence appends its value
+to an ordered **bash array** instead of overwriting a scalar.
+
+```bash
+option topic -t --topic VALUE multi type=choice choices=fast,slow,auto \
+    help="Note topic to show (repeatable)"
+```
+
+`--topic fast --topic slow` populates `topic=(fast slow)`. `type=`/`choices=`
+validation applies to each value independently. `required` + `multi` means
+"at least one occurrence is required" — zero occurrences is a `Missing
+required option` error, same as a non-multi required option. Zero
+occurrences without `required` populates an empty array, so
+`"${#topic[@]}"` is always safe to check regardless of whether the option is
+`multi`. `default=` combined with `multi` is a schema error (checked at
+startup, same as the other schema rules above) — there's no single sensible
+meaning for "the default list" when zero, one, or many values may be
+supplied.
 
 ### `argument <name> <required|optional|variadic> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
 

@@ -80,6 +80,16 @@ Line two.
   assert_equal "$(_bo_meta_get output var)" "build_dir"
 }
 
+@test "option multi keyword sets multi metadata" {
+  option topic -t --topic VALUE multi
+  assert_equal "$(_bo_meta_get topic multi)" "true"
+}
+
+@test "option is not multi by default" {
+  option topic -t --topic VALUE
+  assert_equal "$(_bo_meta_get topic multi)" ""
+}
+
 @test "argument records cardinality, type and help" {
   argument source required type=directory help="Source directory"
   assert_equal "$(_bo_meta_get source cardinality)" "required"
@@ -132,6 +142,12 @@ Line two.
 
 @test "schema finalization rejects a default on a required argument" {
   argument commit required default=HEAD
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects a default combined with multi" {
+  option topic -t --topic VALUE multi default=fast
   run _bo_finalize_schema
   assert_failure
 }

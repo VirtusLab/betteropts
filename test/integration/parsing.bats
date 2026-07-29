@@ -6,6 +6,7 @@ load '../../support/bats-assert/load'
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 VARNAMES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/varnames"
 ARG_DEFAULTS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/arg_defaults"
+MULTI_OPTION_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/multi_option"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -136,6 +137,26 @@ setup() {
   run "$ARG_DEFAULTS_FIXTURE" abc123 carol dave
   assert_success
   assert_line "reviewers=carol dave"
+}
+
+@test "a multi option accumulates repeated occurrences (long form)" {
+  run "$MULTI_OPTION_FIXTURE" --topic conflicts --topic builds
+  assert_success
+  assert_line "topic_count=2"
+  assert_line "topic=conflicts builds"
+}
+
+@test "a multi option accumulates repeated occurrences (mixed forms)" {
+  run "$MULTI_OPTION_FIXTURE" -t conflicts --topic=builds --topic tests
+  assert_success
+  assert_line "topic_count=3"
+  assert_line "topic=conflicts builds tests"
+}
+
+@test "a multi option populates an empty array with zero occurrences" {
+  run "$MULTI_OPTION_FIXTURE"
+  assert_success
+  assert_line "topic_count=0"
 }
 
 @test "populated variables are not exported" {

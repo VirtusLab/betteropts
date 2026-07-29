@@ -11,6 +11,7 @@ setup() {
   option count -c --count N type=integer
   option config --config FILE type=file
   option output -o --output PATH type=directory
+  option topic -t --topic VALUE multi type=choice choices=conflicts,builds,tests
   argument source required type=directory
 }
 
@@ -80,6 +81,14 @@ setup() {
   assert_success
   assert_line "src-one"
   assert_line "src-two"
+}
+
+@test "a multi option offers the full choice list regardless of values already chosen" {
+  run _bo_complete -- --topic conflicts --topic ""
+  assert_success
+  assert_line "conflicts"
+  assert_line "builds"
+  assert_line "tests"
 }
 
 @test "_bo_bash_completion delegates to the target command's --__complete" {

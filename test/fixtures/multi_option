@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Multi-value option sample"
+
+option topic -t --topic VALUE \
+    multi \
+    help="Note topic to show (repeatable)"
+
+betteropts_parse "$@"
+
+echo "topic_count=${#topic[@]}"
+echo "topic=${topic[*]:-}"

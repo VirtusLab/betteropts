@@ -126,6 +126,9 @@ _bo_declare() {
           _bo_meta_set "$name" required "true"
         fi
         ;;
+      multi)
+        _bo_meta_set "$name" multi "true"
+        ;;
       *)
         if [[ "$kind" == "option" ]] && ! _bo_meta_has "$name" metavar; then
           _bo_meta_set "$name" metavar "$tok"
@@ -166,6 +169,13 @@ argument() {
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
   local name cardinality variadic_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+
+  for name in "${_bo_options[@]}"; do
+    if [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && _bo_meta_has "$name" default; then
+      echo "A multi option cannot declare a default." >&2
+      return 1
+    fi
+  done
 
   for i in "${!_bo_arguments[@]}"; do
     name="${_bo_arguments[$i]}"
@@ -269,6 +279,22 @@ declare -gA _bo_provided=()
 declare -gA _bo_raw=()
 declare -ga _bo_positional_tokens=()
 declare -ga _bo_variadic_values=()
+declare -gA _bo_multi_values=()
+declare -gA _bo_multi_count=()
+
+# Records an occurrence of a (possibly multi) option's value: appended to an
+# ordered per-name list for `multi` options, overwritten otherwise.
+_bo_set_option_value() {
+  local name="$1" value="$2" idx
+  _bo_provided[$name]="true"
+  if [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
+    idx="${_bo_multi_count[$name]:-0}"
+    _bo_multi_values["$name.$idx"]="$value"
+    _bo_multi_count[$name]=$((idx + 1))
+  else
+    _bo_raw[$name]="$value"
+  fi
+}
 
 _bo_is_flag() {
   [[ "$(_bo_meta_get "$1" kind)" == "flag" ]]
@@ -300,6 +326,8 @@ _bo_parse() {
   _bo_provided=()
   _bo_raw=()
   _bo_positional_tokens=()
+  _bo_multi_values=()
+  _bo_multi_count=()
 
   local args=("$@") after_dashdash=false
   local i=0 n=${#args[@]}
@@ -325,8 +353,7 @@ _bo_parse() {
         _bo_die_unknown_option "$tok"
         return 1
       fi
-      _bo_provided[$name]="true"
-      _bo_raw[$name]="$value"
+      _bo_set_option_value "$name" "$value"
       i=$((i + 1))
       continue
     fi
@@ -345,8 +372,7 @@ _bo_parse() {
           _bo_die_missing_value "$name"
           return 1
         fi
-        _bo_provided[$name]="true"
-        _bo_raw[$name]="${args[$((i + 1))]}"
+        _bo_set_option_value "$name" "${args[$((i + 1))]}"
         i=$((i + 2))
       fi
       continue
@@ -366,8 +392,7 @@ _bo_parse() {
           _bo_die_missing_value "$name"
           return 1
         fi
-        _bo_provided[$name]="true"
-        _bo_raw[$name]="${args[$((i + 1))]}"
+        _bo_set_option_value "$name" "${args[$((i + 1))]}"
         i=$((i + 2))
       fi
       continue
@@ -470,7 +495,7 @@ _bo_validate_type() {
 }
 
 _bo_validate() {
-  local name cardinality
+  local name cardinality count idx value
 
   for name in "${_bo_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" required)" == "true" && -z "${_bo_provided[$name]:-}" ]]; then
@@ -488,7 +513,14 @@ _bo_validate() {
   done
 
   for name in "${_bo_options[@]}"; do
-    if [[ -n "${_bo_provided[$name]:-}" ]]; then
+    if [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
+      count="${_bo_multi_count[$name]:-0}"
+      for ((idx = 0; idx < count; idx++)); do
+        value="${_bo_multi_values["$name.$idx"]}"
+        _bo_validate_type "$(_bo_display_flag "$name")" "$value" \
+          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+      done
+    elif [[ -n "${_bo_provided[$name]:-}" ]]; then
       _bo_validate_type "$(_bo_display_flag "$name")" "${_bo_raw[$name]}" \
         "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
     fi
@@ -554,7 +586,7 @@ _bo_apply_defaults() {
 # ---------------------------------------------------------------------------
 
 _bo_populate() {
-  local name var cardinality i
+  local name var cardinality i count
 
   for name in "${_bo_flags[@]}"; do
     var="$(_bo_meta_get "$name" var)"
@@ -567,14 +599,22 @@ _bo_populate() {
 
   for name in "${_bo_options[@]}"; do
     var="$(_bo_meta_get "$name" var)"
-    declare -g "$var=${_bo_raw[$name]:-}"
+    if [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
+      declare -ga "$var=()"
+      count="${_bo_multi_count[$name]:-0}"
+      for ((i = 0; i < count; i++)); do
+        declare -g "${var}[$i]=${_bo_multi_values["$name.$i"]}"
+      done
+    else
+      declare -g "$var=${_bo_raw[$name]:-}"
+    fi
   done
 
   for name in "${_bo_arguments[@]}"; do
     var="$(_bo_meta_get "$name" var)"
     cardinality="$(_bo_meta_get "$name" cardinality)"
     if [[ "$cardinality" == "variadic" ]]; then
-      declare -ga "$var"
+      declare -ga "$var=()"
       for i in "${!_bo_variadic_values[@]}"; do
         declare -g "${var}[$i]=${_bo_variadic_values[$i]}"
       done

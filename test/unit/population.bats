@@ -134,6 +134,33 @@ setup() {
   assert_equal "${reviewers[1]}" "dave"
 }
 
+@test "multi option populates a bash array in the order given" {
+  option topic -t --topic VALUE multi
+  _bo_parse --topic conflicts --topic builds
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "${#topic[@]}" "2"
+  assert_equal "${topic[0]}" "conflicts"
+  assert_equal "${topic[1]}" "builds"
+}
+
+@test "multi option populates an empty array with zero occurrences" {
+  option topic -t --topic VALUE multi
+  _bo_parse
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "${#topic[@]}" "0"
+}
+
+@test "multi option var= overrides the populated variable name" {
+  option topic -t --topic VALUE multi var=topics
+  _bo_parse --topic conflicts
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "${#topics[@]}" "1"
+  assert_equal "${topics[0]}" "conflicts"
+}
+
 @test "populated scalar variables are not exported" {
   option output -o --output PATH
   _bo_parse --output /tmp/out

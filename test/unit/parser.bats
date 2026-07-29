@@ -145,3 +145,52 @@ extra"
   assert_success
   assert_equal "${#_bo_variadic_values[@]}" "0"
 }
+
+@test "a repeated multi option accumulates values (long form)" {
+  source "$BETTEROPTS"
+  option topic -t --topic VALUE multi
+  _bo_parse --topic conflicts --topic builds
+  assert_equal "${_bo_multi_count[topic]}" "2"
+  assert_equal "${_bo_multi_values[topic.0]}" "conflicts"
+  assert_equal "${_bo_multi_values[topic.1]}" "builds"
+}
+
+@test "a repeated multi option accumulates values (short form)" {
+  source "$BETTEROPTS"
+  option topic -t --topic VALUE multi
+  _bo_parse -t conflicts -t builds
+  assert_equal "${_bo_multi_count[topic]}" "2"
+  assert_equal "${_bo_multi_values[topic.0]}" "conflicts"
+  assert_equal "${_bo_multi_values[topic.1]}" "builds"
+}
+
+@test "a repeated multi option accumulates values (--name=value form)" {
+  source "$BETTEROPTS"
+  option topic -t --topic VALUE multi
+  _bo_parse --topic=conflicts --topic=builds
+  assert_equal "${_bo_multi_count[topic]}" "2"
+  assert_equal "${_bo_multi_values[topic.0]}" "conflicts"
+  assert_equal "${_bo_multi_values[topic.1]}" "builds"
+}
+
+@test "a multi option accumulates values across mixed forms in order" {
+  source "$BETTEROPTS"
+  option topic -t --topic VALUE multi
+  _bo_parse -t conflicts --topic=builds --topic tests
+  assert_equal "${_bo_multi_count[topic]}" "3"
+  assert_equal "${_bo_multi_values[topic.0]}" "conflicts"
+  assert_equal "${_bo_multi_values[topic.1]}" "builds"
+  assert_equal "${_bo_multi_values[topic.2]}" "tests"
+}
+
+@test "a multi option marks provided true like any other option" {
+  source "$BETTEROPTS"
+  option topic -t --topic VALUE multi
+  _bo_parse -t conflicts
+  assert_equal "${_bo_provided[topic]:-}" "true"
+}
+
+@test "a non-multi option still overwrites on repeat" {
+  _bo_parse --output /tmp/a --output /tmp/b
+  assert_equal "${_bo_raw[output]}" "/tmp/b"
+}

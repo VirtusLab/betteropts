@@ -48,6 +48,26 @@ accepts a lot of input it doesn't actually understand, and never says so:
     misspelled cardinality keyword like `requried`, or a copy-paste
     leftover) falls into the same catch-all and is dropped with zero
     effect and zero error.
+- **An `argument`'s cardinality is never checked for presence or
+  uniqueness**, even though README states "Exactly one of `required`,
+  `optional`, `variadic`, or `passthrough` must be given." This is a
+  distinct gap from the misspelling case above (which is about rejecting
+  a bad token that *was* given) — here there's no bad token to catch:
+  - **Omitted entirely**: `argument src` (no cardinality keyword at all)
+    leaves `_bo_meta_get src cardinality` as `""`. Every downstream
+    check (`_bo_assign_positionals`, `_bo_validate`) treats `""`
+    identically to `optional` — the argument silently becomes optional,
+    with no schema error and no indication the author forgot the
+    keyword. Confirmed: `argument src` followed by `betteropts_parse
+    "$@"` with no positional given returns success with `src` empty,
+    exactly as if `optional` had been declared.
+  - **Given more than once**: `argument src required optional` — both
+    are individually valid keywords for `argument`, so neither is
+    rejected by the fix above; the second silently overwrites
+    `cardinality`, and the conflict (the author almost certainly meant
+    only one) is never flagged. Confirmed: this parses cleanly and
+    behaves as `optional`, with no error or warning that `required` was
+    specified and then immediately discarded.
 
 In every case above, the author's mistake is invisible until (at best) the
 resulting CLI behaves subtly wrong at runtime — no default, no
@@ -91,6 +111,16 @@ enforce that contract instead of silently tolerating anything outside it.
   for a second bare metavar-shaped token.
 - For `flag`/`argument`, any bareword that isn't a recognized keyword is
   a schema error rather than falling through the catch-all unnoticed.
+- Every `argument` must declare **exactly one** of
+  `required`/`optional`/`variadic`/`passthrough` — zero occurrences (a
+  missing cardinality entirely) and two-or-more occurrences (a conflict)
+  are both schema errors, not silently coerced to `optional` or to
+  whichever keyword happened to be seen last. This is a presence/
+  uniqueness check on top of the per-token rejection above: even a
+  schema where every individual token is independently valid can still
+  violate this constraint (`argument src required optional` — both
+  tokens are valid `argument` keywords, but declaring both together
+  isn't).
 - These are schema errors, not user-input errors: following this
   project's existing convention (`_bo_finalize_schema`'s
   multi+default / required+default / variadic-ordering checks), they
@@ -147,6 +177,9 @@ completely unaffected.
 - `test/unit/schema.bats`: a second bareword after an `option`'s metavar
   is rejected; an unrecognized bareword on a `flag` or `argument` (e.g. a
   misspelled cardinality keyword) is rejected.
+- `test/unit/schema.bats`: an `argument` declared with no cardinality
+  keyword at all is rejected; an `argument` declared with two (e.g.
+  `required optional`) is rejected.
 - `test/unit/schema.bats`: every currently-documented modifier for every
   kind still declares cleanly (a regression guard proving the stricter
   parser doesn't reject anything legitimate).

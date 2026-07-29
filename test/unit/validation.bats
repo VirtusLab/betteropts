@@ -176,3 +176,19 @@ FILES notanumber (must be an integer)"
   _bo_apply_defaults
   assert_equal "${_bo_raw[output]:-}" ""
 }
+
+@test "an optional argument's default is not type-checked" {
+  argument count optional type=integer default=notanumber
+  _bo_parse
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "a variadic argument's default is not type-checked" {
+  argument ids variadic type=integer default=notanumber,alsonotanumber
+  _bo_parse
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}

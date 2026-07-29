@@ -84,6 +84,56 @@ setup() {
   assert_equal "${#files[@]}" "0"
 }
 
+@test "optional argument populates its default when omitted" {
+  argument commit optional default=HEAD
+  _bo_parse
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "$commit" "HEAD"
+}
+
+@test "optional argument populates the given value over its default" {
+  argument commit optional default=HEAD
+  _bo_parse abc123
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "$commit" "abc123"
+}
+
+@test "variadic argument populates its default (single value) when omitted" {
+  argument folders variadic default=.
+  _bo_parse
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "${#folders[@]}" "1"
+  assert_equal "${folders[0]}" "."
+}
+
+@test "variadic argument populates its comma-split default when omitted" {
+  argument reviewers variadic default=alice,bob
+  _bo_parse
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "${#reviewers[@]}" "2"
+  assert_equal "${reviewers[0]}" "alice"
+  assert_equal "${reviewers[1]}" "bob"
+}
+
+@test "variadic argument populates given values over its default" {
+  argument reviewers variadic default=alice,bob
+  _bo_parse carol dave
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "${#reviewers[@]}" "2"
+  assert_equal "${reviewers[0]}" "carol"
+  assert_equal "${reviewers[1]}" "dave"
+}
+
 @test "populated scalar variables are not exported" {
   option output -o --output PATH
   _bo_parse --output /tmp/out

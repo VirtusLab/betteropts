@@ -5,6 +5,7 @@ load '../../support/bats-assert/load'
 
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 VARNAMES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/varnames"
+ARG_DEFAULTS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/arg_defaults"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -111,6 +112,30 @@ setup() {
   run "$VARNAMES_FIXTURE" --output "$OUT_DIR" --quiet "$SRC_DIR"
   assert_success
   assert_line "quiet=true"
+}
+
+@test "optional argument default is applied when omitted" {
+  run "$ARG_DEFAULTS_FIXTURE"
+  assert_success
+  assert_line "commit=HEAD"
+}
+
+@test "optional argument default is overridden when provided" {
+  run "$ARG_DEFAULTS_FIXTURE" abc123
+  assert_success
+  assert_line "commit=abc123"
+}
+
+@test "variadic argument default is applied when omitted" {
+  run "$ARG_DEFAULTS_FIXTURE"
+  assert_success
+  assert_line "reviewers=alice bob"
+}
+
+@test "variadic argument default is overridden when provided" {
+  run "$ARG_DEFAULTS_FIXTURE" abc123 carol dave
+  assert_success
+  assert_line "reviewers=carol dave"
 }
 
 @test "populated variables are not exported" {

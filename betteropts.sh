@@ -165,11 +165,18 @@ argument() {
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
-  local name variadic_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+  local name cardinality variadic_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
 
   for i in "${!_bo_arguments[@]}"; do
     name="${_bo_arguments[$i]}"
-    if [[ "$(_bo_meta_get "$name" cardinality)" == "variadic" ]]; then
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+
+    if [[ "$cardinality" == "required" ]] && _bo_meta_has "$name" default; then
+      echo "A required argument cannot declare a default." >&2
+      return 1
+    fi
+
+    if [[ "$cardinality" == "variadic" ]]; then
       if [[ "$variadic_seen" == "true" ]]; then
         echo "Only one variadic argument is allowed." >&2
         return 1
@@ -508,14 +515,29 @@ _bo_validate() {
 # Defaults
 #
 # Applied after validation and before variable population: an omitted
-# option that declares a default is filled in with that default value.
+# option or argument that declares a default is filled in with that default
+# value. Like an option's default, an argument's default is trusted as-is
+# and never itself type-checked.
 # ---------------------------------------------------------------------------
 
 _bo_apply_defaults() {
-  local name
+  local name cardinality default
   for name in "${_bo_options[@]}"; do
     if [[ -z "${_bo_provided[$name]:-}" ]] && _bo_meta_has "$name" default; then
       _bo_raw[$name]="$(_bo_meta_get "$name" default)"
+    fi
+  done
+
+  for name in "${_bo_arguments[@]}"; do
+    _bo_meta_has "$name" default || continue
+    default="$(_bo_meta_get "$name" default)"
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "variadic" ]]; then
+      if [[ "${#_bo_variadic_values[@]}" -eq 0 ]]; then
+        IFS=',' read -ra _bo_variadic_values <<< "$default"
+      fi
+    elif [[ -z "${_bo_raw[$name]:-}" ]]; then
+      _bo_raw[$name]="$default"
     fi
   done
 }

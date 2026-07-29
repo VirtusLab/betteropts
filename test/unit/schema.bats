@@ -106,6 +106,16 @@ Line two.
   assert_equal "$(_bo_meta_get source var)" "input_dir"
 }
 
+@test "argument records default on optional cardinality" {
+  argument commit optional default=HEAD
+  assert_equal "$(_bo_meta_get commit default)" "HEAD"
+}
+
+@test "argument records default on variadic cardinality" {
+  argument folders variadic default=.
+  assert_equal "$(_bo_meta_get folders default)" "."
+}
+
 @test "schema finalization rejects more than one variadic argument" {
   argument files1 variadic
   argument files2 variadic
@@ -116,6 +126,12 @@ Line two.
 @test "schema finalization rejects a variadic argument that is not last" {
   argument files variadic
   argument destination optional
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects a default on a required argument" {
+  argument commit required default=HEAD
   run _bo_finalize_schema
   assert_failure
 }

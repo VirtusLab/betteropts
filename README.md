@@ -111,24 +111,35 @@ option output -o --output PATH required type=directory help="Output directory"
 option jobs -j --jobs N default=4 type=integer help="Worker count"
 ```
 
-### `argument <name> <required|optional|variadic> [type=T] [choices=a,b,c] [var=name] [help="..."]`
+### `argument <name> <required|optional|variadic> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
 
 A positional argument. Exactly one of `required`, `optional`, or `variadic`
 must be given:
 
-- `required` — must be supplied.
-- `optional` — may be omitted; populates an empty string when it is.
+- `required` — must be supplied. Cannot declare a `default=` (a required
+  argument with a default is a contradiction — checked at startup as a
+  schema error, the same way "more than one variadic argument" is).
+- `optional` — may be omitted; populates an empty string when it is, or the
+  `default=` value if one was declared.
 - `variadic` — collects every remaining positional token into a **bash
   array**, zero or more. Only one variadic argument is allowed per CLI, and
   it must be the last one declared (checked at startup; a broken schema is
   a bug in your script, not user input, so it's reported the same way a
-  parse error is).
+  parse error is). If none were given and a `default=` was declared, the
+  array is populated by splitting the default on commas (same convention as
+  `choices=a,b,c`).
 
 ```bash
 argument source required type=directory help="Source directory"
 argument destination optional type=directory help="Destination directory"
 argument files variadic help="Extra files"   # populates files=(...)
+
+argument commit optional default=HEAD help="Commit ref"
+argument reviewers variadic default=alice,bob help="Reviewers"
 ```
+
+As with `option`'s `default=`, an argument's default is trusted as-is and is
+never itself type-checked.
 
 ### Overriding the populated variable name
 

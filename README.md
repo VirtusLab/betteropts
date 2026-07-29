@@ -233,6 +233,31 @@ argument from_range required type=git-range help="Range to copy notes from"
 argument to_range required type=git-range help="Range to copy notes to"
 ```
 
+### Schema validation
+
+A broken CLI declaration is treated as a bug in your script, not user
+input: `betteropts_parse` rejects it before parsing `$@` at all, naming the
+exact bad token.
+
+An unrecognized `key=value` attribute (a typo like `chocies=` instead of
+`choices=`) is rejected:
+
+```
+'chocies' is not a recognized attribute for option 'mode'.
+```
+
+So is a bareword keyword that isn't valid for the given kind — `required`
+or `multi` on a `flag`, `optional`/`variadic`/`passthrough` on anything but
+an `argument`, or a second bareword after an `option`'s metavar:
+
+```
+'optional' is not a valid option modifier for 'jobs'.
+```
+
+An `argument` must declare **exactly one** of `required`, `optional`,
+`variadic`, or `passthrough` — declaring none, or more than one, is also a
+schema error rather than silently behaving as `optional`.
+
 ### Help text annotations
 
 `--help` appends a parenthesized, comma-separated annotation list after an

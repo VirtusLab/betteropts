@@ -90,14 +90,42 @@ description() {
   _bo_description="$1"
 }
 
+# Whether `key` is a recognized key=value attribute for a declaration of the
+# given kind, per README's per-kind modifier tables.
+_bo_key_allowed() {
+  local kind="$1" key="$2"
+  case "$kind" in
+    flag)
+      [[ "$key" == "help" ]]
+      ;;
+    option)
+      case "$key" in
+        help | type | choices | default | var | metavar) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    argument)
+      case "$key" in
+        help | type | choices | default | var) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+  esac
+}
+
 # Shared declaration-token parser for flag/option/argument.
 #
 # Recognizes:
 #   --xxx        -> long flag name
 #   -x           -> short flag name
-#   key=value    -> attribute
-#   bareword     -> cardinality keyword (required/optional/variadic) or,
-#                   for options, the metavar (first non-keyword bareword)
+#   key=value    -> attribute (must be in _bo_key_allowed's list for this
+#                   kind; otherwise recorded as bad_key for
+#                   _bo_finalize_schema to reject)
+#   bareword     -> cardinality keyword (required/optional/variadic/
+#                   passthrough), multi, or, for options, the metavar (first
+#                   non-keyword bareword). A keyword not valid for this kind,
+#                   or a bareword beyond an option's single metavar, is
+#                   recorded as bad_keyword for _bo_finalize_schema to reject.
 _bo_declare() {
   local kind="$1" name="$2"
   shift 2
@@ -117,23 +145,39 @@ _bo_declare() {
         _bo_meta_set "$name" short "$tok"
         ;;
       *=*)
-        _bo_meta_set "$name" "${tok%%=*}" "${tok#*=}"
+        local key="${tok%%=*}"
+        if _bo_key_allowed "$kind" "$key"; then
+          _bo_meta_set "$name" "$key" "${tok#*=}"
+        else
+          _bo_meta_set "$name" bad_key "$key"
+        fi
         ;;
       required|optional|variadic|passthrough)
         if [[ "$kind" == "argument" ]]; then
           _bo_meta_set "$name" cardinality "$tok"
-        elif [[ "$tok" == "required" ]]; then
+          _bo_meta_set "$name" cardinality_count "$(( $(_bo_meta_get "$name" cardinality_count) + 1 ))"
+        elif [[ "$kind" == "option" && "$tok" == "required" ]]; then
           _bo_meta_set "$name" required "true"
         else
-          _bo_meta_set "$name" bad_cardinality "$tok"
+          _bo_meta_set "$name" bad_keyword "$tok"
         fi
         ;;
       multi)
-        _bo_meta_set "$name" multi "true"
+        if [[ "$kind" == "option" ]]; then
+          _bo_meta_set "$name" multi "true"
+        else
+          _bo_meta_set "$name" bad_keyword "$tok"
+        fi
         ;;
       *)
-        if [[ "$kind" == "option" ]] && ! _bo_meta_has "$name" metavar; then
-          _bo_meta_set "$name" metavar "$tok"
+        if [[ "$kind" == "option" ]]; then
+          if _bo_meta_has "$name" metavar; then
+            _bo_meta_set "$name" bad_keyword "$tok"
+          else
+            _bo_meta_set "$name" metavar "$tok"
+          fi
+        else
+          _bo_meta_set "$name" bad_keyword "$tok"
         fi
         ;;
     esac
@@ -170,11 +214,16 @@ argument() {
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
-  local name cardinality collects_rest_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+  local name kind cardinality count collects_rest_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
 
-  for name in "${_bo_flags_and_options[@]}"; do
-    if _bo_meta_has "$name" bad_cardinality; then
-      echo "'$(_bo_meta_get "$name" bad_cardinality)' is not a valid flag/option modifier (only 'required' is; 'optional', 'variadic', and 'passthrough' apply only to arguments)." >&2
+  for name in "${_bo_flags_and_options[@]}" "${_bo_arguments[@]}"; do
+    kind="$(_bo_meta_get "$name" kind)"
+    if _bo_meta_has "$name" bad_key; then
+      echo "'$(_bo_meta_get "$name" bad_key)' is not a recognized attribute for $kind '$name'." >&2
+      return 1
+    fi
+    if _bo_meta_has "$name" bad_keyword; then
+      echo "'$(_bo_meta_get "$name" bad_keyword)' is not a valid $kind modifier for '$name'." >&2
       return 1
     fi
   done
@@ -189,6 +238,16 @@ _bo_finalize_schema() {
   for i in "${!_bo_arguments[@]}"; do
     name="${_bo_arguments[$i]}"
     cardinality="$(_bo_meta_get "$name" cardinality)"
+    count="$(_bo_meta_get "$name" cardinality_count)"
+    count="${count:-0}"
+
+    if [[ "$count" -eq 0 ]]; then
+      echo "Argument '$name' must declare exactly one of required, optional, variadic, or passthrough (none given)." >&2
+      return 1
+    elif [[ "$count" -gt 1 ]]; then
+      echo "Argument '$name' declares more than one of required, optional, variadic, or passthrough (only one is allowed)." >&2
+      return 1
+    fi
 
     if [[ "$cardinality" == "required" ]] && _bo_meta_has "$name" default; then
       echo "A required argument cannot declare a default." >&2

@@ -167,11 +167,6 @@ Options
   assert_equal "$(_bo_annotations destination)" ""
 }
 
-@test "_bo_annotations is never shown for a flag, regardless of how it's declared" {
-  flag verbose -v --verbose required default=true help="Enable verbose logging"
-  assert_equal "$(_bo_annotations verbose)" ""
-}
-
 @test "_bo_option_label appends annotations after the metavar" {
   option output -o --output PATH required help="Output directory"
   assert_equal "$(_bo_option_label output)" "-o, --output PATH (required)"

@@ -244,3 +244,84 @@ Line two.
   run _bo_finalize_schema
   assert_success
 }
+
+@test "schema finalization rejects an unrecognized key on a flag" {
+  flag verbose -v --verbose bogus=1
+  run _bo_finalize_schema
+  assert_failure
+  assert_output --partial "bogus"
+}
+
+@test "schema finalization rejects an unrecognized key on an option" {
+  option mode -m --mode MODE chocies=fast,slow
+  run _bo_finalize_schema
+  assert_failure
+  assert_output --partial "chocies"
+}
+
+@test "schema finalization rejects an unrecognized key on an argument" {
+  argument source required deafult=foo
+  run _bo_finalize_schema
+  assert_failure
+  assert_output --partial "deafult"
+}
+
+@test "schema finalization rejects 'multi' on a flag" {
+  flag verbose -v --verbose multi
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'multi' on an argument" {
+  argument files required multi
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'required' on a flag" {
+  flag verbose -v --verbose required
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects a second bareword on an option" {
+  option output -o --output PATH BOGUS
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects an unrecognized bareword on a flag" {
+  flag verbose -v --verbose bogus
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects a misspelled cardinality keyword on an argument" {
+  argument source requried
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects an argument with no cardinality keyword" {
+  argument source
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects an argument declaring two cardinality keywords" {
+  argument source required optional
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization accepts every documented modifier for each kind" {
+  flag verbose -v --verbose help="Enable verbose logging"
+  option output -o --output PATH required type=directory help="Output directory"
+  option jobs -j --jobs N default=4 type=integer help="Worker count"
+  option topic -t --topic VALUE multi type=choice choices=fast,slow,auto var=topics help="Topics"
+  argument source required type=directory var=input_dir help="Source directory"
+  argument destination optional type=directory default=. help="Destination directory"
+  argument files variadic help="Extra files"
+  run _bo_finalize_schema
+  assert_success
+}

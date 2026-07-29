@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Git range sample"
+
+argument from_range required \
+    type=git-range \
+    help="Range to copy notes from"
+
+argument to_range required \
+    type=git-range \
+    help="Range to copy notes to"
+
+betteropts_parse "$@"
+
+echo "from_range=${from_range:-}"
+echo "to_range=${to_range:-}"

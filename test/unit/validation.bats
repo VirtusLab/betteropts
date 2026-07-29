@@ -319,3 +319,54 @@ FILES notanumber (must be an integer)"
 
 --base HEAD"
 }
+
+@test "type=git-range accepts a bare revision" {
+  setup_git_repo
+  option range -r --range VALUE type=git-range
+  _bo_parse --range HEAD
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-range accepts an A..B range" {
+  setup_git_repo
+  option range -r --range VALUE type=git-range
+  _bo_parse --range "HEAD~1..HEAD"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-range accepts an A...B range" {
+  setup_git_repo
+  option range -r --range VALUE type=git-range
+  _bo_parse --range "HEAD~1...HEAD"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-range rejects a range with a bogus endpoint" {
+  setup_git_repo
+  option range -r --range VALUE type=git-range
+  _bo_parse --range "HEAD..does-not-exist"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Invalid value:
+
+--range HEAD..does-not-exist (not a valid git revision range)"
+}
+
+@test "type=git-range reports a distinct error outside a git repository" {
+  cd "$BATS_TEST_TMPDIR"
+  option range -r --range VALUE type=git-range
+  _bo_parse --range HEAD
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Not inside a git repository:
+
+--range HEAD"
+}

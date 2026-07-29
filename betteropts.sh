@@ -487,9 +487,9 @@ _bo_assign_positionals() {
 _bo_git_inside_work_tree=""
 
 # Whether the current directory is inside a git working tree. Checked lazily
-# (only once type=git-commitish validation is actually needed) and cached for
-# the rest of the process, since every git-commitish value shares the same
-# answer.
+# (only once type=git-commitish/type=git-range validation is actually needed)
+# and cached for the rest of the process, since every value of either type
+# shares the same answer.
 _bo_inside_git_work_tree() {
   if [[ -z "$_bo_git_inside_work_tree" ]]; then
     if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -553,6 +553,16 @@ _bo_validate_type() {
       }
       git rev-parse --verify --quiet "${value}^{commit}" >/dev/null 2>&1 || {
         _bo_die_invalid_value "$ident" "$value" "not a valid git revision"
+        return 1
+      }
+      ;;
+    git-range)
+      _bo_inside_git_work_tree || {
+        _bo_die_not_in_git_repo "$ident" "$value"
+        return 1
+      }
+      git rev-list --count "$value" >/dev/null 2>&1 || {
+        _bo_die_invalid_value "$ident" "$value" "not a valid git revision range"
         return 1
       }
       ;;

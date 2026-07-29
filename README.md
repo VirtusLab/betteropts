@@ -203,6 +203,7 @@ populates `$build_dir` and `$input_dir` instead of `$output`/`$source`.
 | `directory` | path exists and is a directory       | directory completion  |
 | `choice`    | one of `choices=a,b,c`               | the listed choices    |
 | `git-commitish` | resolves to a commit via `git rev-parse` | none            |
+| `git-range` | resolves via `git rev-list --count`  | none                  |
 
 Omitting `type=` is the same as `type=string`. A default value (`default=`)
 is trusted as-is and is never itself type-checked.
@@ -219,6 +220,17 @@ through.
 ```bash
 option base -b --base VALUE type=git-commitish help="Base commit to diff against"
 argument commit optional type=git-commitish default=HEAD help="Commit to inspect"
+```
+
+`type=git-range` accepts either a bare revision or a `A..B`/`A...B` range,
+by running `git rev-list --count "<value>"`. Kept as a separate type from
+`git-commitish` rather than an extension of it, so a plain single-commit
+field doesn't silently start accepting range syntax. Same not-in-a-repo
+handling as `git-commitish`.
+
+```bash
+argument from_range required type=git-range help="Range to copy notes from"
+argument to_range required type=git-range help="Range to copy notes to"
 ```
 
 ## Calling `betteropts_parse "$@"`

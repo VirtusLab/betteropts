@@ -9,6 +9,7 @@ set -euo pipefail
 BUILD_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 TYPES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/types"
 GIT_COMMITISH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/git_commitish"
+GIT_RANGE_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/git_range"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -145,4 +146,30 @@ SOURCE $BATS_TEST_TMPDIR/nope (no such directory)"
   assert_output "Not inside a git repository:
 
 --base HEAD"
+}
+
+@test "type=git-range accepts a bare revision and an A..B range" {
+  setup_git_repo
+  run "$GIT_RANGE_FIXTURE" HEAD "HEAD~1..HEAD"
+  assert_success
+  assert_line "from_range=HEAD"
+  assert_line "to_range=HEAD~1..HEAD"
+}
+
+@test "type=git-range rejects a range with a bogus endpoint" {
+  setup_git_repo
+  run "$GIT_RANGE_FIXTURE" HEAD "HEAD..does-not-exist"
+  assert_failure
+  assert_output "Invalid value:
+
+TO_RANGE HEAD..does-not-exist (not a valid git revision range)"
+}
+
+@test "type=git-range reports a distinct error outside a git repository" {
+  cd "$BATS_TEST_TMPDIR"
+  run "$GIT_RANGE_FIXTURE" HEAD HEAD
+  assert_failure
+  assert_output "Not inside a git repository:
+
+FROM_RANGE HEAD"
 }

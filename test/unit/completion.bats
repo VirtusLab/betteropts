@@ -16,6 +16,7 @@ setup() {
   option output -o --output PATH type=directory
   option topic -t --topic VALUE multi type=choice choices=conflicts,builds,tests
   option base -b --base VALUE type=git-commitish
+  option range -r --range VALUE type=git-range
   argument source required type=directory
 }
 
@@ -89,6 +90,12 @@ setup() {
 
 @test "offers nothing for a type=git-commitish option's value" {
   run _bo_complete -- --base ""
+  assert_success
+  assert_output ""
+}
+
+@test "offers nothing for a type=git-range option's value" {
+  run _bo_complete -- --range ""
   assert_success
   assert_output ""
 }

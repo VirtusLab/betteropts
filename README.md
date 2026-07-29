@@ -233,6 +233,37 @@ argument from_range required type=git-range help="Range to copy notes from"
 argument to_range required type=git-range help="Range to copy notes to"
 ```
 
+### Help text annotations
+
+`--help` appends a parenthesized, comma-separated annotation list after an
+option's or argument's label, summarizing schema facts that would otherwise
+only be visible by reading the CLI's source: `required`, `repeatable` (a
+`multi` option or a `variadic` argument), `default: <value>` (printed
+verbatim, e.g. an unmodified `alice,bob` default list), and `choices: <a, b,
+c>` (for `type=choice`). Only the annotations that actually apply are
+shown; an option or argument with none of these renders exactly as it did
+before. `flag` declarations never gain an annotation — they don't support
+`required`, `multi`, `default=`, or `choices=` at all.
+
+```bash
+option output -o --output PATH required type=directory help="Output directory"
+option jobs -j --jobs N default=4 type=integer help="Worker count"
+option topic -t --topic VALUE multi type=choice choices=fast,slow,auto help="Note topic to show"
+```
+
+renders as:
+
+```
+-o, --output PATH (required)
+    Output directory
+
+-j, --jobs N (default: 4)
+    Worker count
+
+-t, --topic VALUE (repeatable, choices: fast, slow, auto)
+    Note topic to show
+```
+
 ## Calling `betteropts_parse "$@"`
 
 This is the only function you call after declaring the CLI, and it must be

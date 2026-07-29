@@ -8,7 +8,7 @@ summary "Multi-value option sample"
 
 option topic -t --topic VALUE \
     multi \
-    help="Note topic to show (repeatable)"
+    help="Note topic to show"
 
 betteropts_parse "$@"
 

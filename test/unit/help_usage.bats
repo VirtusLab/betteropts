@@ -64,8 +64,8 @@ Supports incremental and parallel builds.
 "
   flag verbose -v --verbose help="Enable verbose logging"
   flag force -f --force help="Overwrite existing output"
-  option output -o --output PATH help="Output directory"
-  option jobs -j --jobs N help="Worker count"
+  option output -o --output PATH required help="Output directory"
+  option jobs -j --jobs N default=4 help="Worker count"
   argument source required help="Source directory"
   argument destination optional help="Destination directory"
 
@@ -81,7 +81,7 @@ build [OPTIONS] SOURCE [DESTINATION]
 
 Arguments
 
-SOURCE
+SOURCE (required)
     Source directory
 
 DESTINATION
@@ -95,16 +95,93 @@ Options
 -f, --force
     Overwrite existing output
 
--o, --output PATH
+-o, --output PATH (required)
     Output directory
 
--j, --jobs N
+-j, --jobs N (default: 4)
     Worker count
 
 -h, --help
     Show this help"
 
   assert_equal "$(_bo_help_text)" "$expected"
+}
+
+@test "_bo_annotations marks a required option" {
+  option output -o --output PATH required help="Output directory"
+  assert_equal "$(_bo_annotations output)" "required"
+}
+
+@test "_bo_annotations marks a multi option repeatable" {
+  option topic -t --topic VALUE multi help="Topic"
+  assert_equal "$(_bo_annotations topic)" "repeatable"
+}
+
+@test "_bo_annotations shows an option's default value" {
+  option jobs -j --jobs N default=4 help="Worker count"
+  assert_equal "$(_bo_annotations jobs)" "default: 4"
+}
+
+@test "_bo_annotations shows an option's choice list" {
+  option mode -m --mode MODE type=choice choices=fast,slow,auto help="Mode"
+  assert_equal "$(_bo_annotations mode)" "choices: fast, slow, auto"
+}
+
+@test "_bo_annotations combines required, repeatable, and choices for an option" {
+  option topic -t --topic VALUE required multi type=choice choices=fast,slow,auto help="Topic"
+  assert_equal "$(_bo_annotations topic)" "required, repeatable, choices: fast, slow, auto"
+}
+
+@test "_bo_annotations is empty for a plain option" {
+  option output -o --output PATH help="Output directory"
+  assert_equal "$(_bo_annotations output)" ""
+}
+
+@test "_bo_annotations marks a required argument" {
+  argument source required help="Source directory"
+  assert_equal "$(_bo_annotations source)" "required"
+}
+
+@test "_bo_annotations marks a variadic argument repeatable" {
+  argument files variadic help="Files"
+  assert_equal "$(_bo_annotations files)" "repeatable"
+}
+
+@test "_bo_annotations shows an argument's default value" {
+  argument commit optional default=HEAD help="Commit ref"
+  assert_equal "$(_bo_annotations commit)" "default: HEAD"
+}
+
+@test "_bo_annotations shows a variadic argument's default value list verbatim" {
+  argument reviewers variadic default=alice,bob help="Reviewers"
+  assert_equal "$(_bo_annotations reviewers)" "repeatable, default: alice,bob"
+}
+
+@test "_bo_annotations shows an argument's choice list" {
+  argument mode optional type=choice choices=fast,slow,auto help="Mode"
+  assert_equal "$(_bo_annotations mode)" "choices: fast, slow, auto"
+}
+
+@test "_bo_annotations is empty for a plain optional argument" {
+  argument destination optional help="Destination directory"
+  assert_equal "$(_bo_annotations destination)" ""
+}
+
+@test "_bo_annotations is never shown for a flag, regardless of how it's declared" {
+  flag verbose -v --verbose required default=true help="Enable verbose logging"
+  assert_equal "$(_bo_annotations verbose)" ""
+}
+
+@test "_bo_option_label appends annotations after the metavar" {
+  option output -o --output PATH required help="Output directory"
+  assert_equal "$(_bo_option_label output)" "-o, --output PATH (required)"
+}
+
+@test "help text renders no parenthesized suffix when no annotations apply" {
+  summary "Plain"
+  option output -o --output PATH help="Output directory"
+  argument source optional help="Source directory"
+  refute [[ "$(_bo_help_text)" == *"("* ]]
 }
 
 @test "help text omits the Arguments section when no arguments are declared" {

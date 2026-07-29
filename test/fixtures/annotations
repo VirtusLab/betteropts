@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Annotation sample"
+
+option output -o --output PATH \
+    required \
+    type=directory \
+    help="Output directory"
+
+option jobs -j --jobs N \
+    default=4 \
+    type=integer \
+    help="Worker count"
+
+option topic -t --topic VALUE \
+    multi \
+    type=choice choices=fast,slow,auto \
+    help="Note topic to show"
+
+argument source required \
+    type=directory \
+    help="Source directory"
+
+argument reviewers variadic \
+    default=alice,bob \
+    help="Reviewers"
+
+betteropts_parse "$@"
+
+echo "output=$output"
+echo "jobs=$jobs"
+echo "topic=${topic[*]:-}"
+echo "source=$source"
+echo "reviewers=${reviewers[*]:-}"

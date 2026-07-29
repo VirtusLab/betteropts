@@ -753,10 +753,47 @@ _bo_trim_description() {
   printf '%s' "$text"
 }
 
+# The parenthesized, comma-separated annotation list for a declared name's
+# --help entry (e.g. "required, repeatable, choices: a, b, c"), summarizing
+# schema facts (required, multi/variadic, default=, choices=) that would
+# otherwise only be visible by reading the CLI's source. Empty for a flag
+# (flags don't support any of these) and for anything that declares none of
+# them.
+_bo_annotations() {
+  local name="$1" kind cardinality choices parts=()
+  kind="$(_bo_meta_get "$name" kind)"
+
+  if [[ "$kind" == "argument" ]]; then
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    [[ "$cardinality" == "required" ]] && parts+=("required")
+    [[ "$cardinality" == "variadic" ]] && parts+=("repeatable")
+  elif [[ "$kind" == "option" ]]; then
+    [[ "$(_bo_meta_get "$name" required)" == "true" ]] && parts+=("required")
+    [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && parts+=("repeatable")
+  fi
+
+  if [[ "$kind" == "option" || "$kind" == "argument" ]]; then
+    _bo_meta_has "$name" default && parts+=("default: $(_bo_meta_get "$name" default)")
+    if [[ "$(_bo_meta_get "$name" type)" == "choice" ]]; then
+      choices="$(_bo_meta_get "$name" choices)"
+      parts+=("choices: ${choices//,/, }")
+    fi
+  fi
+
+  (( ${#parts[@]} == 0 )) && return 0
+
+  local joined="${parts[0]}" i
+  for ((i = 1; i < ${#parts[@]}; i++)); do
+    joined+=", ${parts[$i]}"
+  done
+  printf '%s' "$joined"
+}
+
 # The label shown in the Options section: "-x, --xxx", "--xxx", or "-x"
-# alone, plus a trailing metavar for options.
+# alone, plus a trailing metavar for options, plus a trailing parenthesized
+# annotation list (see _bo_annotations) when any annotation applies.
 _bo_option_label() {
-  local name="$1" short long metavar label
+  local name="$1" short long metavar annotations label
   short="$(_bo_meta_get "$name" short)"
   long="$(_bo_meta_get "$name" long)"
   if [[ -n "$short" && -n "$long" ]]; then
@@ -770,6 +807,8 @@ _bo_option_label() {
     metavar="$(_bo_meta_get "$name" metavar)"
     [[ -n "$metavar" ]] && label+=" $metavar"
   fi
+  annotations="$(_bo_annotations "$name")"
+  [[ -n "$annotations" ]] && label+=" ($annotations)"
   printf '%s' "$label"
 }
 
@@ -785,7 +824,11 @@ _bo_help_text() {
   if [[ ${#_bo_arguments[@]} -gt 0 ]]; then
     out+=$'\n\n'"Arguments"
     for name in "${_bo_arguments[@]}"; do
-      out+=$'\n\n'"$(_bo_display_argument "$name")"$'\n'"    $(_bo_meta_get "$name" help)"
+      local arg_header annotations
+      arg_header="$(_bo_display_argument "$name")"
+      annotations="$(_bo_annotations "$name")"
+      [[ -n "$annotations" ]] && arg_header+=" ($annotations)"
+      out+=$'\n\n'"$arg_header"$'\n'"    $(_bo_meta_get "$name" help)"
     done
   fi
 

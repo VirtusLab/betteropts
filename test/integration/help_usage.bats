@@ -7,6 +7,7 @@ set -euo pipefail
 
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
+ANNOTATIONS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/annotations"
 
 @test "--usage prints summary and usage line only" {
   run "$FIXTURE" --usage
@@ -41,7 +42,7 @@ build [OPTIONS] SOURCE [DESTINATION]
 
 Arguments
 
-SOURCE
+SOURCE (required)
     Source directory
 
 DESTINATION
@@ -55,10 +56,10 @@ Options
 -f, --force
     Overwrite existing output
 
--o, --output PATH
+-o, --output PATH (required)
     Output directory
 
--j, --jobs N
+-j, --jobs N (default: 4)
     Worker count
 
 -h, --help
@@ -102,4 +103,37 @@ Options
   assert_success
   assert_line "GIT_ARGS"
   assert_line "    Extra options forwarded to git log"
+}
+
+@test "--help annotates required, repeatable, default, and choices" {
+  run "$ANNOTATIONS_FIXTURE" --help
+  assert_success
+  expected="Annotation sample
+
+Usage:
+
+annotations [OPTIONS] SOURCE [REVIEWERS...]
+
+Arguments
+
+SOURCE (required)
+    Source directory
+
+REVIEWERS (repeatable, default: alice,bob)
+    Reviewers
+
+Options
+
+-o, --output PATH (required)
+    Output directory
+
+-j, --jobs N (default: 4)
+    Worker count
+
+-t, --topic VALUE (repeatable, choices: fast, slow, auto)
+    Note topic to show
+
+-h, --help
+    Show this help"
+  assert_output "$expected"
 }

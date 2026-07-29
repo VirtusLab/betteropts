@@ -230,7 +230,7 @@ build [OPTIONS] SOURCE [DESTINATION]
 
 Arguments
 
-SOURCE
+SOURCE (required)
     Source directory
 
 DESTINATION
@@ -244,10 +244,10 @@ Options
 -f, --force
     Overwrite existing output
 
--o, --output PATH
+-o, --output PATH (required)
     Output directory
 
--j, --jobs N
+-j, --jobs N (default: 4)
     Worker count
 
 -h, --help

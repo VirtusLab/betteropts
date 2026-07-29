@@ -3,9 +3,12 @@
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
 
+set -euo pipefail
+
 BETTEROPTS="$BATS_TEST_DIRNAME/../../betteropts.sh"
 
 setup() {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   TMP_FILE="$BATS_TEST_TMPDIR/file.txt"
   TMP_DIR="$BATS_TEST_TMPDIR/dir"

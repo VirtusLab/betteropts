@@ -3,6 +3,8 @@
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
 
+set -euo pipefail
+
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 VARNAMES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/varnames"
 ARG_DEFAULTS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/arg_defaults"

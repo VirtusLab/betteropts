@@ -3,6 +3,8 @@
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
 
+set -euo pipefail
+
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 
 @test "--usage prints summary and usage line only" {

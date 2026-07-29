@@ -3,9 +3,12 @@
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
 
+set -euo pipefail
+
 BETTEROPTS="$BATS_TEST_DIRNAME/../../betteropts.sh"
 
 setup() {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   flag verbose -v --verbose
   flag force -f --force
@@ -125,6 +128,7 @@ extra"
 }
 
 @test "a variadic argument collects all remaining positional tokens" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   argument source required
   argument files variadic
@@ -137,6 +141,7 @@ extra"
 }
 
 @test "a variadic argument accepts zero values" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   argument source required
   argument files variadic
@@ -147,6 +152,7 @@ extra"
 }
 
 @test "a repeated multi option accumulates values (long form)" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option topic -t --topic VALUE multi
   _bo_parse --topic conflicts --topic builds
@@ -156,6 +162,7 @@ extra"
 }
 
 @test "a repeated multi option accumulates values (short form)" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option topic -t --topic VALUE multi
   _bo_parse -t conflicts -t builds
@@ -165,6 +172,7 @@ extra"
 }
 
 @test "a repeated multi option accumulates values (--name=value form)" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option topic -t --topic VALUE multi
   _bo_parse --topic=conflicts --topic=builds
@@ -174,6 +182,7 @@ extra"
 }
 
 @test "a multi option accumulates values across mixed forms in order" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option topic -t --topic VALUE multi
   _bo_parse -t conflicts --topic=builds --topic tests
@@ -184,6 +193,7 @@ extra"
 }
 
 @test "a multi option marks provided true like any other option" {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option topic -t --topic VALUE multi
   _bo_parse -t conflicts

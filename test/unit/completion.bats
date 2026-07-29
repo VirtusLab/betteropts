@@ -3,9 +3,12 @@
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
 
+set -euo pipefail
+
 BETTEROPTS="$BATS_TEST_DIRNAME/../../betteropts.sh"
 
 setup() {
+  # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option mode -m --mode MODE type=choice choices=fast,slow,auto
   option count -c --count N type=integer

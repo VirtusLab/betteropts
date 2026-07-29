@@ -122,8 +122,10 @@ _bo_declare() {
       required|optional|variadic|passthrough)
         if [[ "$kind" == "argument" ]]; then
           _bo_meta_set "$name" cardinality "$tok"
-        else
+        elif [[ "$tok" == "required" ]]; then
           _bo_meta_set "$name" required "true"
+        else
+          _bo_meta_set "$name" bad_cardinality "$tok"
         fi
         ;;
       multi)
@@ -169,6 +171,13 @@ argument() {
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
   local name cardinality collects_rest_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+
+  for name in "${_bo_flags_and_options[@]}"; do
+    if _bo_meta_has "$name" bad_cardinality; then
+      echo "'$(_bo_meta_get "$name" bad_cardinality)' is not a valid flag/option modifier (only 'required' is; 'optional', 'variadic', and 'passthrough' apply only to arguments)." >&2
+      return 1
+    fi
+  done
 
   for name in "${_bo_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && _bo_meta_has "$name" default; then

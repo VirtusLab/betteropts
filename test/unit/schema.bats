@@ -78,6 +78,26 @@ Line two.
   assert_equal "$(_bo_meta_get jobs required)" "false"
 }
 
+@test "option declaring optional does not set required metadata" {
+  option jobs -j --jobs N optional
+  assert_equal "$(_bo_meta_get jobs required)" "false"
+}
+
+@test "option declaring variadic does not set required metadata" {
+  option jobs -j --jobs N variadic
+  assert_equal "$(_bo_meta_get jobs required)" "false"
+}
+
+@test "option declaring passthrough does not set required metadata" {
+  option jobs -j --jobs N passthrough
+  assert_equal "$(_bo_meta_get jobs required)" "false"
+}
+
+@test "flag declaring optional does not set required metadata" {
+  flag verbose -v --verbose optional
+  assert_equal "$(_bo_meta_get verbose required)" "false"
+}
+
 @test "option var overrides the populated variable name" {
   option output -o --output PATH var=build_dir
   assert_equal "$(_bo_meta_get output var)" "build_dir"
@@ -177,6 +197,42 @@ Line two.
 
 @test "schema finalization rejects a default combined with multi" {
   option topic -t --topic VALUE multi default=fast
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'optional' on an option" {
+  option jobs -j --jobs N optional
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'variadic' on an option" {
+  option jobs -j --jobs N variadic
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'passthrough' on an option" {
+  option jobs -j --jobs N passthrough
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'optional' on a flag" {
+  flag verbose -v --verbose optional
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'variadic' on a flag" {
+  flag verbose -v --verbose variadic
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects 'passthrough' on a flag" {
+  flag verbose -v --verbose passthrough
   run _bo_finalize_schema
   assert_failure
 }

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Git commitish sample"
+
+option base -b --base VALUE \
+    type=git-commitish \
+    help="Base commit to diff against"
+
+argument commit optional \
+    type=git-commitish \
+    default=HEAD \
+    help="Commit to inspect"
+
+betteropts_parse "$@"
+
+echo "base=${base:-}"
+echo "commit=${commit:-}"

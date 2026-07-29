@@ -15,6 +15,7 @@ setup() {
   option config --config FILE type=file
   option output -o --output PATH type=directory
   option topic -t --topic VALUE multi type=choice choices=conflicts,builds,tests
+  option base -b --base VALUE type=git-commitish
   argument source required type=directory
 }
 
@@ -84,6 +85,12 @@ setup() {
   assert_success
   assert_line "src-one"
   assert_line "src-two"
+}
+
+@test "offers nothing for a type=git-commitish option's value" {
+  run _bo_complete -- --base ""
+  assert_success
+  assert_output ""
 }
 
 @test "a multi option offers the full choice list regardless of values already chosen" {

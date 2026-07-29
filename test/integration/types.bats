@@ -2,11 +2,13 @@
 
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
+load '../helpers/git_repo'
 
 set -euo pipefail
 
 BUILD_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 TYPES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/types"
+GIT_COMMITISH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/git_commitish"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -110,4 +112,37 @@ SOURCE $BATS_TEST_TMPDIR/nope (no such directory)"
   run "$TYPES_FIXTURE" --count 1 alpha beta gamma
   assert_success
   assert_line "files=alpha beta gamma"
+}
+
+@test "type=git-commitish accepts a full SHA, a branch, and a relative expression" {
+  setup_git_repo
+  run "$GIT_COMMITISH_FIXTURE" --base "$GIT_REPO_HEAD" HEAD~1
+  assert_success
+  assert_line "base=$GIT_REPO_HEAD"
+  assert_line "commit=HEAD~1"
+}
+
+@test "type=git-commitish rejects a nonexistent ref" {
+  setup_git_repo
+  run "$GIT_COMMITISH_FIXTURE" --base does-not-exist
+  assert_failure
+  assert_output "Invalid value:
+
+--base does-not-exist (not a valid git revision)"
+}
+
+@test "an omitted git-commitish argument's default is applied without being validated" {
+  setup_git_repo
+  run "$GIT_COMMITISH_FIXTURE" --base "$GIT_REPO_HEAD"
+  assert_success
+  assert_line "commit=HEAD"
+}
+
+@test "type=git-commitish reports a distinct error outside a git repository" {
+  cd "$BATS_TEST_TMPDIR"
+  run "$GIT_COMMITISH_FIXTURE" --base HEAD
+  assert_failure
+  assert_output "Not inside a git repository:
+
+--base HEAD"
 }

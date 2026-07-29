@@ -2,6 +2,7 @@
 
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
+load '../helpers/git_repo'
 
 set -euo pipefail
 
@@ -232,4 +233,89 @@ FILES notanumber (must be an integer)"
   _bo_assign_positionals
   run _bo_validate
   assert_success
+}
+
+@test "type=git-commitish accepts a full SHA" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base "$GIT_REPO_HEAD"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-commitish accepts an abbreviated SHA" {
+  setup_git_repo
+  local short_sha
+  short_sha="$(git rev-parse --short HEAD)"
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base "$short_sha"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-commitish accepts a branch name" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base feature-branch
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-commitish accepts a tag name" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base v1.0
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-commitish accepts a relative expression like HEAD~1" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base HEAD~1
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
+@test "type=git-commitish rejects a nonexistent ref" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base does-not-exist
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Invalid value:
+
+--base does-not-exist (not a valid git revision)"
+}
+
+@test "type=git-commitish rejects a tree sha (not a commit)" {
+  setup_git_repo
+  local tree_sha
+  tree_sha="$(git rev-parse "HEAD^{tree}")"
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base "$tree_sha"
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Invalid value:
+
+--base $tree_sha (not a valid git revision)"
+}
+
+@test "type=git-commitish reports a distinct error outside a git repository" {
+  cd "$BATS_TEST_TMPDIR"
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base HEAD
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Not inside a git repository:
+
+--base HEAD"
 }

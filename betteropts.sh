@@ -259,6 +259,10 @@ _bo_die_missing_required_option() {
   _bo_print_error "Missing required option" "$(_bo_display_flag "$1")"
 }
 
+_bo_die_not_in_git_repo() {
+  _bo_print_error "Not inside a git repository" "$1 $2"
+}
+
 # $1 = display identifier (a flag form or an uppercased argument name)
 # $2 = the offending raw value
 # $3 = human-readable reason, e.g. "must be an integer"
@@ -480,6 +484,23 @@ _bo_assign_positionals() {
 # applied (a default is trusted as-is; it is never itself validated).
 # ---------------------------------------------------------------------------
 
+_bo_git_inside_work_tree=""
+
+# Whether the current directory is inside a git working tree. Checked lazily
+# (only once type=git-commitish validation is actually needed) and cached for
+# the rest of the process, since every git-commitish value shares the same
+# answer.
+_bo_inside_git_work_tree() {
+  if [[ -z "$_bo_git_inside_work_tree" ]]; then
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      _bo_git_inside_work_tree="true"
+    else
+      _bo_git_inside_work_tree="false"
+    fi
+  fi
+  [[ "$_bo_git_inside_work_tree" == "true" ]]
+}
+
 _bo_choice_matches() {
   local value="$1" choices="$2"
   local -a list
@@ -522,6 +543,16 @@ _bo_validate_type() {
     choice)
       _bo_choice_matches "$value" "$choices" || {
         _bo_die_invalid_value "$ident" "$value" "choices: ${choices//,/, }"
+        return 1
+      }
+      ;;
+    git-commitish)
+      _bo_inside_git_work_tree || {
+        _bo_die_not_in_git_repo "$ident" "$value"
+        return 1
+      }
+      git rev-parse --verify --quiet "${value}^{commit}" >/dev/null 2>&1 || {
+        _bo_die_invalid_value "$ident" "$value" "not a valid git revision"
         return 1
       }
       ;;

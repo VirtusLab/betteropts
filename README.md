@@ -202,9 +202,24 @@ populates `$build_dir` and `$input_dir` instead of `$output`/`$source`.
 | `file`      | path exists and is a regular file    | file completion       |
 | `directory` | path exists and is a directory       | directory completion  |
 | `choice`    | one of `choices=a,b,c`               | the listed choices    |
+| `git-commitish` | resolves to a commit via `git rev-parse` | none            |
 
 Omitting `type=` is the same as `type=string`. A default value (`default=`)
 is trusted as-is and is never itself type-checked.
+
+`type=git-commitish` accepts anything git itself would accept as a
+commit-ish — a SHA (full or abbreviated), branch, tag, or an expression like
+`HEAD~2` — by running `git rev-parse --verify --quiet "<value>^{commit}"`.
+A tree/blob SHA (not a commit) or an unresolvable name is rejected with the
+usual `Invalid value:` error. If the command isn't running inside a git
+repository at all, that's reported distinctly as `Not inside a git
+repository:` rather than letting git's own error for the inner check leak
+through.
+
+```bash
+option base -b --base VALUE type=git-commitish help="Base commit to diff against"
+argument commit optional type=git-commitish default=HEAD help="Commit to inspect"
+```
 
 ## Calling `betteropts_parse "$@"`
 

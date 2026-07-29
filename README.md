@@ -130,10 +130,10 @@ startup, same as the other schema rules above) — there's no single sensible
 meaning for "the default list" when zero, one, or many values may be
 supplied.
 
-### `argument <name> <required|optional|variadic> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
+### `argument <name> <required|optional|variadic|passthrough> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
 
-A positional argument. Exactly one of `required`, `optional`, or `variadic`
-must be given:
+A positional argument. Exactly one of `required`, `optional`, `variadic`, or
+`passthrough` must be given:
 
 - `required` — must be supplied. Cannot declare a `default=` (a required
   argument with a default is a contradiction — checked at startup as a
@@ -141,12 +141,21 @@ must be given:
 - `optional` — may be omitted; populates an empty string when it is, or the
   `default=` value if one was declared.
 - `variadic` — collects every remaining positional token into a **bash
-  array**, zero or more. Only one variadic argument is allowed per CLI, and
-  it must be the last one declared (checked at startup; a broken schema is
-  a bug in your script, not user input, so it's reported the same way a
-  parse error is). If none were given and a `default=` was declared, the
-  array is populated by splitting the default on commas (same convention as
-  `choices=a,b,c`).
+  array**, zero or more. If none were given and a `default=` was declared,
+  the array is populated by splitting the default on commas (same
+  convention as `choices=a,b,c`).
+- `passthrough` — like `variadic`, but the parser stops looking for declared
+  flags/options as soon as it hits the first token that isn't one of them,
+  and captures every remaining token verbatim into a **bash array** —
+  including tokens starting with `-`, with no "Unknown option" error. This
+  is the same boundary a literal `--` already creates, just triggered
+  automatically instead of requiring the marker. No `type=`/`choices=`
+  validation applies to passthrough tokens, and no `default=` is supported.
+
+Only one `variadic` **or** `passthrough` argument is allowed per CLI
+(whichever kind it is), and it must be the last one declared (checked at
+startup; a broken schema is a bug in your script, not user input, so it's
+reported the same way a parse error is).
 
 ```bash
 argument source required type=directory help="Source directory"
@@ -155,7 +164,18 @@ argument files variadic help="Extra files"   # populates files=(...)
 
 argument commit optional default=HEAD help="Commit ref"
 argument reviewers variadic default=alice,bob help="Reviewers"
+
+argument git_args passthrough help="Extra options forwarded to git log"
 ```
+
+```bash
+option author -a --author VALUE help="Filter by author"
+argument git_args passthrough help="Extra options forwarded to git log"
+```
+
+invoked as `mycommand --author alice --stat -M` populates `author=alice` and
+`git_args=(--stat -M)` — `--stat`/`-M` are never looked up as declared
+options once the boundary is crossed.
 
 As with `option`'s `default=`, an argument's default is trusted as-is and is
 never itself type-checked.

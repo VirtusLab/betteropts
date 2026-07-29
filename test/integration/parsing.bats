@@ -9,6 +9,7 @@ FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 VARNAMES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/varnames"
 ARG_DEFAULTS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/arg_defaults"
 MULTI_OPTION_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/multi_option"
+PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -159,6 +160,29 @@ setup() {
   run "$MULTI_OPTION_FIXTURE"
   assert_success
   assert_line "topic_count=0"
+}
+
+@test "a declared option before the passthrough boundary still parses normally" {
+  run "$PASSTHROUGH_FIXTURE" --author alice --stat -M
+  assert_success
+  assert_line "author=alice"
+  assert_line "git_args_count=2"
+  assert_line "git_args=--stat -M"
+}
+
+@test "passthrough captures flag-shaped tokens without an unknown option error" {
+  run "$PASSTHROUGH_FIXTURE" --stat -M v1.0
+  assert_success
+  assert_line "author="
+  assert_line "git_args_count=3"
+  assert_line "git_args=--stat -M v1.0"
+}
+
+@test "passthrough argument is empty when nothing follows declared options" {
+  run "$PASSTHROUGH_FIXTURE" --author bob
+  assert_success
+  assert_line "author=bob"
+  assert_line "git_args_count=0"
 }
 
 @test "populated variables are not exported" {

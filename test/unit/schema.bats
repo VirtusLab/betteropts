@@ -143,6 +143,32 @@ Line two.
   assert_failure
 }
 
+@test "argument supports passthrough cardinality" {
+  argument extra passthrough
+  assert_equal "$(_bo_meta_get extra cardinality)" "passthrough"
+}
+
+@test "schema finalization rejects a passthrough argument that is not last" {
+  argument extra passthrough
+  argument destination optional
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects both a variadic and a passthrough argument" {
+  argument files variadic
+  argument extra passthrough
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization accepts a passthrough argument as the sole collect-rest argument" {
+  argument source required
+  argument extra passthrough
+  run _bo_finalize_schema
+  assert_success
+}
+
 @test "schema finalization rejects a default on a required argument" {
   argument commit required default=HEAD
   run _bo_finalize_schema

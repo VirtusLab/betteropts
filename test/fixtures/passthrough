@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Passthrough sample"
+
+option author -a --author VALUE \
+    help="Filter by author"
+
+argument git_args passthrough \
+    help="Extra options forwarded to git log"
+
+betteropts_parse "$@"
+
+echo "author=${author:-}"
+echo "git_args_count=${#git_args[@]}"
+echo "git_args=${git_args[*]:-}"

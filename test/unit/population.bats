@@ -173,6 +173,27 @@ setup() {
   assert_output "unset"
 }
 
+@test "passthrough argument populates a bash array in order, including flag-shaped tokens" {
+  option author -a --author VALUE
+  argument extra passthrough
+  _bo_parse --author foo bar --stat -M
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "$author" "foo"
+  assert_equal "${#extra[@]}" "3"
+  assert_equal "${extra[0]}" "bar"
+  assert_equal "${extra[1]}" "--stat"
+  assert_equal "${extra[2]}" "-M"
+}
+
+@test "passthrough argument populates an empty array when nothing follows" {
+  argument extra passthrough
+  _bo_parse
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "${#extra[@]}" "0"
+}
+
 @test "population is not shadowed by an internal local variable of the same name" {
   # _bo_populate's own implementation uses local loop variables (e.g. "name",
   # "var", "value"); a CLI author is free to name their own option/argument

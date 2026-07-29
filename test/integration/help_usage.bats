@@ -6,6 +6,7 @@ load '../../support/bats-assert/load'
 set -euo pipefail
 
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
+PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
 
 @test "--usage prints summary and usage line only" {
   run "$FIXTURE" --usage
@@ -88,4 +89,17 @@ Options
   run "$FIXTURE" --output /tmp -- --help
   assert_failure
   refute_output --partial "Usage:"
+}
+
+@test "--usage renders a passthrough argument with an ellipsis" {
+  run "$PASSTHROUGH_FIXTURE" --usage
+  assert_success
+  assert_output --partial "[GIT_ARGS...]"
+}
+
+@test "--help renders a passthrough argument like any other argument, without fake type info" {
+  run "$PASSTHROUGH_FIXTURE" --help
+  assert_success
+  assert_line "GIT_ARGS"
+  assert_line "    Extra options forwarded to git log"
 }

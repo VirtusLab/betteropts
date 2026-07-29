@@ -119,7 +119,7 @@ _bo_declare() {
       *=*)
         _bo_meta_set "$name" "${tok%%=*}" "${tok#*=}"
         ;;
-      required|optional|variadic)
+      required|optional|variadic|passthrough)
         if [[ "$kind" == "argument" ]]; then
           _bo_meta_set "$name" cardinality "$tok"
         else
@@ -168,7 +168,7 @@ argument() {
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
-  local name cardinality variadic_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+  local name cardinality collects_rest_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
 
   for name in "${_bo_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && _bo_meta_has "$name" default; then
@@ -186,14 +186,14 @@ _bo_finalize_schema() {
       return 1
     fi
 
-    if [[ "$cardinality" == "variadic" ]]; then
-      if [[ "$variadic_seen" == "true" ]]; then
-        echo "Only one variadic argument is allowed." >&2
+    if [[ "$cardinality" == "variadic" || "$cardinality" == "passthrough" ]]; then
+      if [[ "$collects_rest_seen" == "true" ]]; then
+        echo "Only one variadic or passthrough argument is allowed." >&2
         return 1
       fi
-      variadic_seen=true
+      collects_rest_seen=true
       if [[ "$i" -ne "$last_index" ]]; then
-        echo "The variadic argument must be the last declared argument." >&2
+        echo "The variadic or passthrough argument must be the last declared argument." >&2
         return 1
       fi
     fi
@@ -279,6 +279,7 @@ declare -gA _bo_provided=()
 declare -gA _bo_raw=()
 declare -ga _bo_positional_tokens=()
 declare -ga _bo_variadic_values=()
+declare -ga _bo_passthrough_values=()
 declare -gA _bo_multi_values=()
 declare -gA _bo_multi_count=()
 
@@ -322,6 +323,18 @@ _bo_find_by_short() {
   return 1
 }
 
+# Whether the schema declares a passthrough argument. _bo_finalize_schema
+# guarantees at most one, and that it's last, but this is also called from
+# unit tests that invoke _bo_parse directly without finalizing first, so it
+# checks by cardinality rather than assuming that invariant holds.
+_bo_has_passthrough_argument() {
+  local name
+  for name in "${_bo_arguments[@]}"; do
+    [[ "$(_bo_meta_get "$name" cardinality)" == "passthrough" ]] && return 0
+  done
+  return 1
+}
+
 _bo_parse() {
   _bo_provided=()
   _bo_raw=()
@@ -350,6 +363,12 @@ _bo_parse() {
     if [[ "$tok" == --*=* ]]; then
       local long="${tok%%=*}" value="${tok#*=}" name
       if ! name="$(_bo_find_by_long "$long")" || _bo_is_flag "$name"; then
+        if _bo_has_passthrough_argument; then
+          after_dashdash=true
+          _bo_positional_tokens+=("$tok")
+          i=$((i + 1))
+          continue
+        fi
         _bo_die_unknown_option "$tok"
         return 1
       fi
@@ -361,6 +380,12 @@ _bo_parse() {
     if [[ "$tok" == --* ]]; then
       local name
       if ! name="$(_bo_find_by_long "$tok")"; then
+        if _bo_has_passthrough_argument; then
+          after_dashdash=true
+          _bo_positional_tokens+=("$tok")
+          i=$((i + 1))
+          continue
+        fi
         _bo_die_unknown_option "$tok"
         return 1
       fi
@@ -381,6 +406,12 @@ _bo_parse() {
     if [[ "$tok" == -?* ]]; then
       local name
       if ! name="$(_bo_find_by_short "$tok")"; then
+        if _bo_has_passthrough_argument; then
+          after_dashdash=true
+          _bo_positional_tokens+=("$tok")
+          i=$((i + 1))
+          continue
+        fi
         _bo_die_unknown_option "$tok"
         return 1
       fi
@@ -410,6 +441,7 @@ _bo_parse() {
 # token; otherwise, more tokens than declared slots is an error.
 _bo_assign_positionals() {
   _bo_variadic_values=()
+  _bo_passthrough_values=()
 
   local idx=0 total=${#_bo_positional_tokens[@]}
   local name cardinality
@@ -419,6 +451,11 @@ _bo_assign_positionals() {
     if [[ "$cardinality" == "variadic" ]]; then
       while (( idx < total )); do
         _bo_variadic_values+=("${_bo_positional_tokens[$idx]}")
+        idx=$((idx + 1))
+      done
+    elif [[ "$cardinality" == "passthrough" ]]; then
+      while (( idx < total )); do
+        _bo_passthrough_values+=("${_bo_positional_tokens[$idx]}")
         idx=$((idx + 1))
       done
     elif (( idx < total )); then
@@ -568,6 +605,8 @@ _bo_apply_defaults() {
       if [[ "${#_bo_variadic_values[@]}" -eq 0 ]]; then
         IFS=',' read -ra _bo_variadic_values <<< "$default"
       fi
+    elif [[ "$cardinality" == "passthrough" ]]; then
+      : # passthrough tokens are raw, unvalidated input; no default applies
     elif [[ -z "${_bo_raw[$name]:-}" ]]; then
       _bo_raw[$name]="$default"
     fi
@@ -618,6 +657,11 @@ _bo_populate() {
       for i in "${!_bo_variadic_values[@]}"; do
         declare -g "${var}[$i]=${_bo_variadic_values[$i]}"
       done
+    elif [[ "$cardinality" == "passthrough" ]]; then
+      declare -ga "$var=()"
+      for i in "${!_bo_passthrough_values[@]}"; do
+        declare -g "${var}[$i]=${_bo_passthrough_values[$i]}"
+      done
     else
       declare -g "$var=${_bo_raw[$name]:-}"
     fi
@@ -639,7 +683,7 @@ _bo_usage_line() {
     case "$cardinality" in
       required) line+=" $(_bo_display_argument "$name")" ;;
       optional) line+=" [$(_bo_display_argument "$name")]" ;;
-      variadic) line+=" [$(_bo_display_argument "$name")...]" ;;
+      variadic|passthrough) line+=" [$(_bo_display_argument "$name")...]" ;;
     esac
   done
   printf '%s' "$line"
@@ -779,7 +823,7 @@ _bo_complete() {
   (( n == 0 )) && return 0
 
   local partial="${words[$((n - 1))]}"
-  local i=0 awaiting_name="" positional_count=0
+  local i=0 awaiting_name="" positional_count=0 past_passthrough_boundary=false
 
   while (( i < n - 1 )); do
     local tok="${words[$i]}" name=""
@@ -790,6 +834,11 @@ _bo_complete() {
       name="$(_bo_find_by_long "$tok")" || true
     elif [[ "$tok" == -?* ]]; then
       name="$(_bo_find_by_short "$tok")" || true
+    fi
+
+    if [[ -z "$name" && "$tok" == -* ]] && _bo_has_passthrough_argument; then
+      past_passthrough_boundary=true
+      break
     fi
 
     if [[ -n "$name" ]] && ! _bo_is_flag "$name"; then
@@ -807,6 +856,8 @@ _bo_complete() {
     fi
   done
 
+  [[ "$past_passthrough_boundary" == "true" ]] && return 0
+
   if [[ -n "$awaiting_name" ]]; then
     _bo_complete_value "$awaiting_name" "$partial"
     return 0
@@ -820,6 +871,9 @@ _bo_complete() {
   local arg_name idx=0 cardinality
   for arg_name in "${_bo_arguments[@]}"; do
     cardinality="$(_bo_meta_get "$arg_name" cardinality)"
+    if [[ "$cardinality" == "passthrough" ]]; then
+      return 0
+    fi
     if [[ "$cardinality" == "variadic" || "$idx" -eq "$positional_count" ]]; then
       _bo_complete_value "$arg_name" "$partial"
       return 0

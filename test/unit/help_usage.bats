@@ -34,6 +34,11 @@ setup() {
   assert_equal "$(_bo_usage_line)" "build [OPTIONS] [FILES...]"
 }
 
+@test "usage line brackets a passthrough argument with an ellipsis" {
+  argument git_args passthrough
+  assert_equal "$(_bo_usage_line)" "build [OPTIONS] [GIT_ARGS...]"
+}
+
 @test "usage line has no argument tokens when none are declared" {
   assert_equal "$(_bo_usage_line)" "build [OPTIONS]"
 }

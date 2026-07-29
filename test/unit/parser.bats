@@ -204,3 +204,45 @@ extra"
   _bo_parse --output /tmp/a --output /tmp/b
   assert_equal "${_bo_raw[output]}" "/tmp/b"
 }
+
+@test "an unrecognized flag-like token starts passthrough capture" {
+  # shellcheck source=../../betteropts.sh
+  source "$BETTEROPTS"
+  option author -a --author VALUE
+  argument extra passthrough
+  _bo_parse --author foo --stat -M
+  _bo_assign_positionals
+  assert_equal "${_bo_raw[author]}" "foo"
+  assert_equal "${_bo_passthrough_values[0]}" "--stat"
+  assert_equal "${_bo_passthrough_values[1]}" "-M"
+}
+
+@test "declared options before the passthrough boundary still parse normally" {
+  # shellcheck source=../../betteropts.sh
+  source "$BETTEROPTS"
+  option author -a --author VALUE
+  argument extra passthrough
+  _bo_parse -a foo bar --stat
+  _bo_assign_positionals
+  assert_equal "${_bo_raw[author]}" "foo"
+  assert_equal "${_bo_passthrough_values[0]}" "bar"
+  assert_equal "${_bo_passthrough_values[1]}" "--stat"
+}
+
+@test "no unknown option error is raised past the passthrough boundary" {
+  # shellcheck source=../../betteropts.sh
+  source "$BETTEROPTS"
+  argument extra passthrough
+  run _bo_parse --whatever -x
+  assert_success
+}
+
+@test "a passthrough argument collects zero tokens when nothing follows" {
+  # shellcheck source=../../betteropts.sh
+  source "$BETTEROPTS"
+  option author -a --author VALUE
+  argument extra passthrough
+  _bo_parse --author foo
+  _bo_assign_positionals
+  assert_equal "${#_bo_passthrough_values[@]}" "0"
+}

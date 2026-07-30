@@ -314,6 +314,49 @@ Line two.
   assert_failure
 }
 
+@test "schema finalization rejects a required argument declared after an optional one" {
+  argument mode optional
+  argument source required
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization accepts a required argument declared before an optional one" {
+  argument source required
+  argument destination optional
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts an optional argument declared before a variadic one" {
+  argument destination optional
+  argument files variadic
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts an optional argument declared before a passthrough one" {
+  argument mode optional
+  argument extra passthrough
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts required, then optional, then variadic" {
+  argument source required
+  argument destination optional
+  argument files variadic
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts two optional arguments in a row" {
+  argument first optional
+  argument second optional
+  run _bo_finalize_schema
+  assert_success
+}
+
 @test "schema finalization accepts every documented modifier for each kind" {
   flag verbose -v --verbose help="Enable verbose logging"
   option output -o --output PATH required type=directory help="Output directory"

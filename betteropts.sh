@@ -214,7 +214,7 @@ argument() {
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
-  local name kind cardinality count collects_rest_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+  local name kind cardinality count collects_rest_seen=false optional_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
 
   for name in "${_bo_flags_and_options[@]}" "${_bo_arguments[@]}"; do
     kind="$(_bo_meta_get "$name" kind)"
@@ -252,6 +252,14 @@ _bo_finalize_schema() {
     if [[ "$cardinality" == "required" ]] && _bo_meta_has "$name" default; then
       echo "A required argument cannot declare a default." >&2
       return 1
+    fi
+
+    if [[ "$cardinality" == "required" && "$optional_seen" == "true" ]]; then
+      echo "Argument '$name' is required but declared after an optional argument (required arguments must come before optional ones)." >&2
+      return 1
+    fi
+    if [[ "$cardinality" == "optional" ]]; then
+      optional_seen=true
     fi
 
     if [[ "$cardinality" == "variadic" || "$cardinality" == "passthrough" ]]; then

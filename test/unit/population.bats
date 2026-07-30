@@ -87,6 +87,51 @@ setup() {
   assert_equal "${#files[@]}" "0"
 }
 
+@test "required arguments fill first, then optional, then variadic gets the remainder" {
+  # features/09-argument-ordering.md: with the required*optional*(variadic|
+  # passthrough)? ordering now enforced by _bo_finalize_schema, the existing
+  # greedy assignment in _bo_assign_positionals is unambiguous.
+  argument source required
+  argument destination optional
+  argument files variadic
+  _bo_parse a b c d
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "$source" "a"
+  assert_equal "$destination" "b"
+  assert_equal "${#files[@]}" "2"
+  assert_equal "${files[0]}" "c"
+  assert_equal "${files[1]}" "d"
+}
+
+@test "an optional argument before a variadic argument claims the first token, leaving variadic empty" {
+  # Locks in features/09-argument-ordering.md's claim that a trailing
+  # variadic argument can never receive a token while an earlier optional
+  # argument goes unfulfilled: _bo_assign_positionals walks arguments with a
+  # single strictly-increasing index, so the earlier-declared optional
+  # argument always gets first claim on any available token.
+  argument destination optional
+  argument files variadic
+  _bo_parse foo
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "$destination" "foo"
+  assert_equal "${#files[@]}" "0"
+}
+
+@test "an optional argument before a passthrough argument claims the first token, even a flag-shaped one" {
+  # Same guarantee as above, extended to passthrough: the optional argument
+  # wins the first token even when it looks like a flag meant for the
+  # passthrough tail.
+  argument mode optional
+  argument extra passthrough
+  _bo_parse --stat
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "$mode" "--stat"
+  assert_equal "${#extra[@]}" "0"
+}
+
 @test "optional argument populates its default when omitted" {
   argument commit optional default=HEAD
   _bo_parse

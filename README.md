@@ -154,6 +154,16 @@ Only one `variadic` **or** `passthrough` argument is allowed per CLI
 startup; a broken schema is a bug in your script, not user input, so it's
 reported the same way a parse error is).
 
+Declared arguments must also follow one fixed order: any `required`
+arguments first, then any `optional` ones, then the trailing `variadic`/
+`passthrough` argument if there is one — `required* optional* (variadic |
+passthrough)?`. Declaring a `required` argument after an `optional` one is
+a schema error rather than being silently accepted, since positional
+tokens are assigned left to right in declaration order — an earlier
+`optional` argument would otherwise greedily claim the token meant for the
+later `required` one, surfacing as a confusing `Missing required argument`
+error instead of a clear schema-declaration error.
+
 ```bash
 argument source required type=directory help="Source directory"
 argument destination optional type=directory help="Destination directory"

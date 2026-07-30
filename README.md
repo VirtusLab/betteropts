@@ -398,3 +398,9 @@ test/run.sh
 `test/unit/*.bats` exercise the library's internal functions directly (by
 sourcing `betteropts.sh`); `test/integration/*.bats` run the fixture CLIs
 under `test/fixtures/` end-to-end as real subprocesses.
+
+Line coverage is measured with [kcov](https://github.com/SimonKagstrom/kcov):
+
+```bash
+test/coverage.sh
+```

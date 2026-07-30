@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run tests
+        env:
+          LC_ALL: C
+          TERM: xterm
+          BATS_OPTS: -F pretty
+        run: test/run.sh
+
+  coverage:
+    # kcov's v42 release binary is linked against Ubuntu 22.04's exact
+    # binutils .so versions (e.g. libopcodes-2.38-system.so), so it only
+    # runs on that release. Matches bats-core's own coverage job:
+    # https://github.com/bats-core/bats-core/blob/master/.github/workflows/tests.yml
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install kcov
+        run: |
+          wget -q https://github.com/SimonKagstrom/kcov/releases/download/v42/kcov-amd64.tar.gz
+          tar -xf kcov-amd64.tar.gz
+          echo "$PWD/usr/local/bin" >> "$GITHUB_PATH"
+
+      - name: Measure coverage
+        env:
+          LC_ALL: C
+          TERM: xterm
+          BATS_OPTS: -F pretty
+        run: test/coverage.sh
+
+      - name: Report coverage
+        run: |
+          jq -r '"Coverage: \(.percent_covered)% (\(.covered_lines)/\(.total_lines) lines)"' \
+            .coverage/run.sh/coverage.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: .coverage/
+          # .coverage/ is a dot-directory; upload-artifact skips hidden
+          # files/dirs unless told otherwise, which silently uploaded
+          # nothing (step still reports success either way).
+          include-hidden-files: true
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        # TODO: drop continue-on-error once test/TODO.md's parser.bats
+        # split lands and the SC2218 false positives go away.
+        continue-on-error: true
+        run: ./shellcheck.sh

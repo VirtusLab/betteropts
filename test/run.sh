@@ -3,4 +3,5 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-exec support/bats/bin/bats --recursive test/unit test/integration
+# shellcheck disable=SC2086
+exec support/bats/bin/bats ${BATS_OPTS:-} --recursive test/unit test/integration

@@ -1,4 +1,4 @@
-# BetterOpts - Runtime Bash CLI Library Specification
+# BetterOpts - Runtime Bash CLI Library Constraints
 
 ## Overview
 
@@ -49,56 +49,6 @@ betteropts_parse
 ```
 
 Everything else is private.
-
----
-
-# Typical Usage
-
-```bash
-#!/usr/bin/env bash
-
-source "$LIB/betteropts.sh"
-
-summary "Build a project"
-
-description "
-Compile a project and write the resulting artifacts.
-
-Supports incremental and parallel builds.
-"
-
-flag verbose -v --verbose \
-    help="Enable verbose logging"
-
-flag force -f --force \
-    help="Overwrite existing output"
-
-option output -o --output PATH \
-    required \
-    type=directory \
-    help="Output directory"
-
-option jobs -j --jobs N \
-    default=4 \
-    type=integer \
-    help="Worker count"
-
-argument source required \
-    type=directory \
-    help="Source directory"
-
-argument destination optional \
-    type=directory \
-    help="Destination directory"
-
-betteropts_parse "$@"
-
-echo "$output"
-echo "$jobs"
-echo "$source"
-```
-
-The command author never manually parses `$@`.
 
 ---
 
@@ -154,473 +104,11 @@ It must not appear in help output.
 
 ---
 
-# summary()
-
-Defines the short command description.
-
-Displayed by:
-
-* `--help`
-* `--usage`
-
-Example:
-
-```bash
-summary "Build a project"
-```
-
----
-
-# description()
-
-Defines an optional long command description.
-
-Displayed only by:
-
-```
---help
-```
-
-Example:
-
-```bash
-description "
-Build compiles the project and writes the resulting
-artifacts to the configured output directory.
-
-Incremental builds are supported.
-"
-```
-
----
-
-# Usage Output
-
-Example:
-
-```
-Build a project
-
-Usage:
-
-build [OPTIONS] SOURCE [DESTINATION]
-```
-
-Only the summary is shown.
-
-The long description is omitted.
-
----
-
-# Help Output
-
-Example:
-
-```
-Build a project
-
-Build compiles the project and writes the resulting
-artifacts to the configured output directory.
-
-Incremental builds are supported.
-
-Usage:
-
-build [OPTIONS] SOURCE [DESTINATION]
-
-Arguments
-
-SOURCE (required)
-    Source directory
-
-DESTINATION
-    Destination directory
-
-Options
-
--v, --verbose
-    Enable verbose logging
-
--f, --force
-    Overwrite existing output
-
--o, --output PATH (required)
-    Output directory
-
--j, --jobs N (default: 4)
-    Worker count
-
--h, --help
-    Show this help
-```
-
-All help text is generated from the CLI schema.
-
----
-
-# Flags
-
-Flags are boolean values.
-
-Declaration:
-
-```bash
-flag verbose -v --verbose \
-    help="Verbose output"
-```
-
-Accepted:
-
-```
--v
-
---verbose
-```
-
-Result:
-
-```bash
-verbose=true
-```
-
-Default:
-
-```bash
-verbose=false
-```
-
-Repeated flags remain true.
-
----
-
-# Options
-
-Options require values.
-
-Declaration:
-
-```bash
-option output -o --output PATH \
-    help="Output directory"
-```
-
-Accepted:
-
-```
--o value
-
---output value
-
---output=value
-```
-
-Result:
-
-```bash
-output="value"
-```
-
----
-
-# Positional Arguments
-
-Required:
-
-```bash
-argument source required
-```
-
-Optional:
-
-```bash
-argument destination optional
-```
-
-Variadic:
-
-```bash
-argument files variadic
-```
-
-Rules:
-
-* only one variadic argument may exist
-* variadic argument must be last
-
----
-
-# Variable Population
-
-After successful parsing, BetterOpts creates shell variables.
-
-By default, the variable name is identical to the declared option or argument name.
-
-Example:
-
-```bash
-option output -o --output PATH
-option jobs -j --jobs N
-
-argument source required
-```
-
-Produces:
-
-```bash
-output=...
-jobs=...
-source=...
-```
-
-Variable names can be overridden.
-
-Example:
-
-```bash
-option output -o --output PATH \
-    var=build_dir
-
-argument source required \
-    var=input_dir
-```
-
-Produces:
-
-```bash
-build_dir=...
-input_dir=...
-```
-
-Flags become boolean variables:
-
-```bash
-flag verbose -v --verbose
-```
-
-Produces:
-
-```bash
-verbose=true
-```
-
-or:
-
-```bash
-verbose=false
-```
-
-These are ordinary shell variables.
-
-They must never be exported.
-
----
-
-# Supported Types
-
-Version 1 supports:
-
-```
-string
-
-integer
-
-float
-
-file # existing
-
-directory # existing
-
-choice
-```
-
-Examples:
-
-```bash
-option jobs \
-    type=integer
-
-option output \
-    type=directory
-
-option config \
-    type=file
-
-option mode \
-    type=choice \
-    choices=fast,slow,auto
-```
-
-The type is the single source of truth for:
-
-* validation
-* completion behavior
-
----
-
-# Defaults
-
-Example:
-
-```bash
-option jobs \
-    default=4
-```
-
-Defaults are applied after parsing and before variables are populated.
-
----
-
-# Required Options
-
-Example:
-
-```bash
-option output \
-    required
-```
-
-Failure:
-
-```
-Missing required option:
-
---output
-```
-
----
-
-# Parsing Rules
-
-Supported syntax:
-
-```
--v
-
--v -f
-
--o value
-
---output value
-
---output=value
-
---
-
-positionals
-```
-
-Unknown options produce errors.
-
-Unexpected positional arguments produce errors.
-
-Missing option values produce errors.
-
-The following syntax is intentionally not supported:
-
-```
--o=value
-```
-
-Bundling (`-vf`) is not supported to reduce complexity but might need to be added later.
-
----
-
-# Bash Completion
-
-Version 1 supports Bash completion only.
-
-The completion interface is internal.
-
-The command is queried through:
-
-```
---__complete
-```
-
-The generic Bash completion script uses this interface.
-
-Completion is generated from the CLI schema.
-
-Completion behavior:
-
-| Type      | Completion           |
-| --------- | -------------------- |
-| file      | file completion      |
-| directory | directory completion |
-| choice    | available choices    |
-| string    | none                 |
-| integer   | none                 |
-| float     | none                 |
-
-No separate completion definitions exist.
-
----
-
-# Error Messages
+# Error Handling
 
 Errors should be concise and consistent.
 
-Examples:
-
-```
-Unknown option:
-
---verboes
-
-Use --help for usage.
-```
-
-```
-Missing value:
-
---output
-```
-
-```
-Unexpected argument:
-
-foo
-```
-
-```
-Missing required argument:
-
-SOURCE
-```
-
 Parse errors terminate execution with a non-zero exit status.
-
-Version 1 does not implement option name suggestions.
-
----
-
-# Internal Architecture
-
-Although distributed as a single file, the implementation should be organized into logical sections:
-
-```
-Public API
-
-Schema
-
-Parser
-
-Validation
-
-Variable Population
-
-Help Generator
-
-Usage Generator
-
-Completion
-
-Error Handling
-
-Utilities
-```
-
-These are implementation details only.
 
 ---
 
@@ -653,6 +141,37 @@ All access should go through an internal metadata API.
 The implementation may use arrays, associative arrays, records, or another representation.
 
 Changing storage should not require changes outside the metadata layer.
+
+---
+
+# Internal Architecture
+
+Although distributed as a single file, the implementation should be organized into logical sections:
+
+```
+Public API
+
+Schema
+
+Error Handling
+
+Parser
+
+Validation
+
+Defaults
+
+Variable Population
+
+Usage Generator
+
+Help Generator
+
+Completion
+```
+
+These are implementation details only; the exact order and boundaries may
+shift as the file grows, so long as each section stays self-contained.
 
 ---
 
@@ -716,3 +235,15 @@ The command author should never manually:
 * populate variables
 
 The command consists only of CLI declaration followed by business logic.
+
+---
+
+# Relationship to `features/`
+
+This document is architecture-level constraints only — invariants that hold
+regardless of which flags/options/arguments/types a given CLI declares. The
+CLI grammar itself (what `flag`/`option`/`argument` accept, what types
+exist, what `--help`/`--usage`/completion render) lives entirely in
+`features/`, one increment per file: [`00-initial.MD`](features/00-initial.MD)
+is the v1 baseline this document used to also describe; the rest are the
+increments layered on top of it since.

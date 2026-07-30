@@ -6,9 +6,6 @@ front; the library parses `$@`, validates it, applies defaults, populates
 shell variables, and generates `--help`/`--usage`/Bash completion — all from
 that one declaration.
 
-See [DESIGN.MD](DESIGN.MD) for the full specification this library
-implements.
-
 ## Requirements
 
 - Bash 4.2 or newer (associative arrays, `declare -g`, `mapfile`). macOS
@@ -104,7 +101,7 @@ name shown in `--help`/usage. Accepts:
 ```
 
 `-o=value` and bundled short flags (`-vf`) are intentionally **not**
-supported (per DESIGN.MD, to keep the parser simple).
+supported, to keep the parser simple.
 
 ```bash
 option output -o --output PATH required type=directory help="Output directory"
@@ -351,8 +348,7 @@ Missing required option:
 --output
 ```
 
-Type-validation failures (not covered by DESIGN.MD's worked examples; this
-project's own convention) look like:
+Type-validation failures look like:
 
 ```
 Invalid value:

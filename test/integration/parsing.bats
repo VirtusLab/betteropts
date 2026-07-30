@@ -110,6 +110,13 @@ setup() {
   assert_success
   assert_line "build_dir=$OUT_DIR"
   assert_line "input_dir=$SRC_DIR"
+  assert_line "quiet=false"
+}
+
+@test "a flag's variable name can be overridden with var=" {
+  run "$VARNAMES_FIXTURE" --output "$OUT_DIR" --quiet "$SRC_DIR"
+  assert_success
+  assert_line "quiet=true"
 }
 
 @test "long-only flag declaration works without a short form" {

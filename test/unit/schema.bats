@@ -40,6 +40,11 @@ Line two.
   assert_equal "$(_bo_meta_get force var)" "force"
 }
 
+@test "flag var overrides the populated variable name" {
+  flag verbose -v --verbose var=is_verbose
+  assert_equal "$(_bo_meta_get verbose var)" "is_verbose"
+}
+
 @test "flag records declaration order" {
   flag verbose -v --verbose
   flag force -f --force

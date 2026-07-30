@@ -78,7 +78,7 @@ multi-line string with a leading and trailing newline (see the quick-start
 example); the leading/trailing blank lines are stripped automatically, any
 blank lines in the middle are preserved.
 
-### `flag <name> [-x] [--xxx] [help="..."]`
+### `flag <name> [-x] [--xxx] [var=name] [help="..."]`
 
 A boolean switch. Give a short form (`-x`), a long form (`--xxx`), or both.
 Populates `<name>=true` if the flag was passed (any number of times),
@@ -190,14 +190,16 @@ never itself type-checked.
 ### Overriding the populated variable name
 
 By default the populated variable is named after the declared name. Add
-`var=name` to any `option` or `argument` to change that:
+`var=name` to any `flag`, `option`, or `argument` to change that:
 
 ```bash
+flag verbose -v --verbose var=is_verbose
 option output -o --output PATH var=build_dir
 argument source required var=input_dir
 ```
 
-populates `$build_dir` and `$input_dir` instead of `$output`/`$source`.
+populates `$is_verbose`, `$build_dir`, and `$input_dir` instead of
+`$verbose`/`$output`/`$source`.
 
 ### Types
 

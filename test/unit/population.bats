@@ -28,6 +28,14 @@ setup() {
   assert_equal "$verbose" "false"
 }
 
+@test "flag var= overrides the populated variable name" {
+  flag verbose -v --verbose var=is_verbose
+  _bo_parse -v
+  _bo_assign_positionals
+  _bo_populate
+  assert_equal "$is_verbose" "true"
+}
+
 @test "option populates its value under the declared name" {
   option output -o --output PATH
   _bo_parse --output /tmp/out

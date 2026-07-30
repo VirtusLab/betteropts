@@ -96,7 +96,10 @@ _bo_key_allowed() {
   local kind="$1" key="$2"
   case "$kind" in
     flag)
-      [[ "$key" == "help" ]]
+      case "$key" in
+        help | var) return 0 ;;
+        *) return 1 ;;
+      esac
       ;;
     option)
       case "$key" in

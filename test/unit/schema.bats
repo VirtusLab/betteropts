@@ -187,6 +187,14 @@ Line two.
   assert_failure
 }
 
+@test "schema finalization rejects two variadic/passthrough arguments with the specific 'only one' message" {
+  argument files variadic
+  argument extra passthrough
+  run _bo_finalize_schema
+  assert_failure
+  assert_output "Only one variadic or passthrough argument is allowed."
+}
+
 @test "schema finalization accepts a passthrough argument as the sole collect-rest argument" {
   argument source required
   argument extra passthrough
@@ -220,6 +228,12 @@ Line two.
 
 @test "schema finalization rejects 'passthrough' on an option" {
   option jobs -j --jobs N passthrough
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization rejects a passthrough argument declaring a default" {
+  argument extra passthrough default=foo
   run _bo_finalize_schema
   assert_failure
 }

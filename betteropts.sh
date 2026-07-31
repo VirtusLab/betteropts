@@ -219,7 +219,7 @@ argument() {
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
-  local name kind cardinality count collects_rest_seen=false optional_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+  local name kind cardinality count collects_rest_count=0 optional_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
 
   for name in "${_bo_flags_and_options[@]}" "${_bo_arguments[@]}"; do
     kind="$(_bo_meta_get "$name" kind)"
@@ -240,6 +240,17 @@ _bo_finalize_schema() {
     fi
   done
 
+  for name in "${_bo_arguments[@]}"; do
+    cardinality="$(_bo_meta_get "$name" cardinality)"
+    if [[ "$cardinality" == "variadic" || "$cardinality" == "passthrough" ]]; then
+      collects_rest_count=$(( collects_rest_count + 1 ))
+    fi
+  done
+  if [[ "$collects_rest_count" -gt 1 ]]; then
+    echo "Only one variadic or passthrough argument is allowed." >&2
+    return 1
+  fi
+
   for i in "${!_bo_arguments[@]}"; do
     name="${_bo_arguments[$i]}"
     cardinality="$(_bo_meta_get "$name" cardinality)"
@@ -259,6 +270,11 @@ _bo_finalize_schema() {
       return 1
     fi
 
+    if [[ "$cardinality" == "passthrough" ]] && _bo_meta_has "$name" default; then
+      echo "A passthrough argument cannot declare a default." >&2
+      return 1
+    fi
+
     if [[ "$cardinality" == "required" && "$optional_seen" == "true" ]]; then
       echo "Argument '$name' is required but declared after an optional argument (required arguments must come before optional ones)." >&2
       return 1
@@ -267,16 +283,9 @@ _bo_finalize_schema() {
       optional_seen=true
     fi
 
-    if [[ "$cardinality" == "variadic" || "$cardinality" == "passthrough" ]]; then
-      if [[ "$collects_rest_seen" == "true" ]]; then
-        echo "Only one variadic or passthrough argument is allowed." >&2
-        return 1
-      fi
-      collects_rest_seen=true
-      if [[ "$i" -ne "$last_index" ]]; then
-        echo "The variadic or passthrough argument must be the last declared argument." >&2
-        return 1
-      fi
+    if [[ "$cardinality" == "variadic" || "$cardinality" == "passthrough" ]] && [[ "$i" -ne "$last_index" ]]; then
+      echo "The variadic or passthrough argument must be the last declared argument." >&2
+      return 1
     fi
   done
 
@@ -735,8 +744,6 @@ _bo_apply_defaults() {
       if [[ "${#_bo_variadic_values[@]}" -eq 0 ]]; then
         IFS=',' read -ra _bo_variadic_values <<< "$default"
       fi
-    elif [[ "$cardinality" == "passthrough" ]]; then
-      : # passthrough tokens are raw, unvalidated input; no default applies
     elif [[ -z "${_bo_raw[$name]:-}" ]]; then
       _bo_raw[$name]="$default"
     fi

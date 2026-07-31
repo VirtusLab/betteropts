@@ -23,8 +23,8 @@ Line one.
 
 Line two.
 "
-  [[ "$_bo_description" == *"Line one."* ]]
-  [[ "$_bo_description" == *"Line two."* ]]
+  assert_regex "$_bo_description" "Line one\."
+  assert_regex "$_bo_description" "Line two\."
 }
 
 @test "flag registers short, long, and help metadata" {

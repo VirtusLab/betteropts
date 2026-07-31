@@ -73,6 +73,16 @@ Use --help for usage."
 Use --help for usage."
 }
 
+@test "an unknown --long=value option is rejected" {
+  run _bo_parse --unknown=value
+  assert_failure
+  assert_output "Unknown option:
+
+--unknown=value
+
+Use --help for usage."
+}
+
 @test "an unknown short option is rejected" {
   run _bo_parse -x
   assert_failure
@@ -130,4 +140,13 @@ extra"
 @test "a non-multi option still overwrites on repeat" {
   _bo_parse --output /tmp/a --output /tmp/b
   assert_equal "${_bo_raw[output]}" "/tmp/b"
+}
+
+@test "a missing option value is rejected for a short-only option" {
+  option threads -t N
+  run _bo_parse -t
+  assert_failure
+  assert_output "Missing value:
+
+-t"
 }

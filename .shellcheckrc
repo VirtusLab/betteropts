@@ -6,7 +6,11 @@ enable=avoid-nullary-conditions
 enable=check-set-e-suppressed
 enable=deprecate-which
 enable=require-double-brackets
-enable=check-extra-masked-returns
+# check-extra-masked-returns would force every $(_bo_meta_get ...)-style
+# accessor call (dozens of sites) out into its own local-variable line,
+# roughly doubling the affected code for no real safety gain: none of
+# these substitutions' exit statuses are meaningful to check.
+#enable=check-extra-masked-returns
 #enable=check-unassigned-uppercase
 #enable=quote-safe-variables
 #enable=require-variable-braces

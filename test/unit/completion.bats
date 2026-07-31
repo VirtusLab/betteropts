@@ -108,6 +108,73 @@ setup() {
   assert_line "tests"
 }
 
+@test "an earlier --opt=value token in the replay is skipped correctly" {
+  run _bo_complete -- --mode=fast --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "an earlier short option token in the replay is resolved via _bo_find_by_short" {
+  run _bo_complete -- -m fast --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "an earlier already-typed flag in the replay doesn't consume the next word as its value" {
+  flag verbose -v --verbose
+  run _bo_complete -- --verbose --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "an earlier already-typed short flag in the replay doesn't consume the next word as its value" {
+  flag verbose -v --verbose
+  run _bo_complete -- -v --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "an earlier plain positional token in the replay advances past a satisfied argument" {
+  argument dest required type=choice choices=alpha,beta
+  run _bo_complete -- foo ""
+  assert_success
+  assert_line "alpha"
+  assert_line "beta"
+  # If "foo" hadn't incremented positional_count, this would still be
+  # offering "source"'s type=directory completion (a filesystem listing)
+  # instead of "dest"'s type=choice completion.
+  assert_equal "${#lines[@]}" 2
+}
+
+@test "completing a later (third) of several declared positional arguments" {
+  cd "$BATS_TEST_TMPDIR"
+  mkdir -p dir-a dir-b
+  argument middle required type=choice choices=x,y
+  argument dest required type=directory
+  run _bo_complete -- foo bar ""
+  assert_success
+  assert_line "dir-a"
+  assert_line "dir-b"
+  refute_line "x"
+  refute_line "y"
+}
+
+@test "completing past all declared positional arguments yields no completions" {
+  argument middle required type=choice choices=x,y
+  argument dest required type=directory
+  run _bo_complete -- foo bar baz ""
+  assert_success
+  assert_output ""
+}
+
 @test "_bo_bash_completion delegates to the target command's --__complete" {
   mock_command() {
     _bo_complete "${@:2}"

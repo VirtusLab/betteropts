@@ -17,7 +17,7 @@ setup() {
   _bo_parse -v
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$verbose" "true"
+  assert_equal "${verbose-}" "true"
 }
 
 @test "flag populates false when not provided" {
@@ -33,7 +33,7 @@ setup() {
   _bo_parse -v
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$is_verbose" "true"
+  assert_equal "${is_verbose-}" "true"
 }
 
 @test "option populates its value under the declared name" {
@@ -49,7 +49,7 @@ setup() {
   _bo_parse --output /tmp/out
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$build_dir" "/tmp/out"
+  assert_equal "${build_dir-}" "/tmp/out"
 }
 
 @test "argument populates its value under the declared name" {
@@ -57,7 +57,7 @@ setup() {
   _bo_parse /tmp/src
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$source" "/tmp/src"
+  assert_equal "${source-}" "/tmp/src"
 }
 
 @test "argument var= overrides the populated variable name" {
@@ -65,7 +65,7 @@ setup() {
   _bo_parse /tmp/src
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$input_dir" "/tmp/src"
+  assert_equal "${input_dir-}" "/tmp/src"
 }
 
 @test "optional argument populates empty when omitted" {
@@ -81,6 +81,7 @@ setup() {
   _bo_parse a b c
   _bo_assign_positionals
   _bo_populate
+  # shellcheck disable=SC2154
   assert_equal "${#files[@]}" "3"
   assert_equal "${files[0]}" "a"
   assert_equal "${files[1]}" "b"
@@ -136,7 +137,8 @@ setup() {
   _bo_parse --stat
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$mode" "--stat"
+  assert_equal "${mode-}" "--stat"
+  # shellcheck disable=SC2154
   assert_equal "${#extra[@]}" "0"
 }
 
@@ -146,7 +148,7 @@ setup() {
   _bo_assign_positionals
   _bo_apply_defaults
   _bo_populate
-  assert_equal "$commit" "HEAD"
+  assert_equal "${commit-}" "HEAD"
 }
 
 @test "optional argument populates the given value over its default" {
@@ -164,6 +166,7 @@ setup() {
   _bo_assign_positionals
   _bo_apply_defaults
   _bo_populate
+  # shellcheck disable=SC2154
   assert_equal "${#folders[@]}" "1"
   assert_equal "${folders[0]}" "."
 }
@@ -174,6 +177,7 @@ setup() {
   _bo_assign_positionals
   _bo_apply_defaults
   _bo_populate
+  # shellcheck disable=SC2154
   assert_equal "${#reviewers[@]}" "2"
   assert_equal "${reviewers[0]}" "alice"
   assert_equal "${reviewers[1]}" "bob"
@@ -195,6 +199,7 @@ setup() {
   _bo_parse --topic conflicts --topic builds
   _bo_assign_positionals
   _bo_populate
+  # shellcheck disable=SC2154
   assert_equal "${#topic[@]}" "2"
   assert_equal "${topic[0]}" "conflicts"
   assert_equal "${topic[1]}" "builds"
@@ -213,6 +218,7 @@ setup() {
   _bo_parse --topic conflicts
   _bo_assign_positionals
   _bo_populate
+  # shellcheck disable=SC2154
   assert_equal "${#topics[@]}" "1"
   assert_equal "${topics[0]}" "conflicts"
 }
@@ -232,7 +238,8 @@ setup() {
   _bo_parse --author foo bar --stat -M
   _bo_assign_positionals
   _bo_populate
-  assert_equal "$author" "foo"
+  assert_equal "${author-}" "foo"
+  # shellcheck disable=SC2154
   assert_equal "${#extra[@]}" "3"
   assert_equal "${extra[0]}" "bar"
   assert_equal "${extra[1]}" "--stat"

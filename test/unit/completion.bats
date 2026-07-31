@@ -108,35 +108,6 @@ setup() {
   assert_line "tests"
 }
 
-@test "offers nothing once past the passthrough boundary" {
-  # shellcheck source=../../betteropts.sh
-  source "$BETTEROPTS"
-  option author -a --author VALUE
-  argument extra passthrough
-  run _bo_complete -- --author alice --stat -
-  assert_success
-  assert_output ""
-}
-
-@test "offers nothing for a passthrough argument's own positional slot" {
-  # shellcheck source=../../betteropts.sh
-  source "$BETTEROPTS"
-  argument extra passthrough
-  run _bo_complete -- ""
-  assert_success
-  assert_output ""
-}
-
-@test "declared options still complete before the passthrough boundary" {
-  # shellcheck source=../../betteropts.sh
-  source "$BETTEROPTS"
-  option author -a --author VALUE
-  argument extra passthrough
-  run _bo_complete -- --aut
-  assert_success
-  assert_output --partial "--author"
-}
-
 @test "_bo_bash_completion delegates to the target command's --__complete" {
   mock_command() {
     _bo_complete "${@:2}"

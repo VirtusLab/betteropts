@@ -349,6 +349,14 @@ _bo_die_invalid_value() {
   _bo_print_error "Invalid value" "$1 $2 ($3)"
 }
 
+# For invariants that schema finalization is supposed to guarantee. Reaching
+# this means finalization itself has a bug, not that the user did anything
+# wrong.
+_bo_die_internal_error() {
+  printf 'betteropts internal error: %s\n' "$1" >&2
+  exit 1
+}
+
 # ---------------------------------------------------------------------------
 # Parser
 #
@@ -804,6 +812,7 @@ _bo_usage_line() {
       required) line+=" $(_bo_display_argument "$name")" ;;
       optional) line+=" [$(_bo_display_argument "$name")]" ;;
       variadic|passthrough) line+=" [$(_bo_display_argument "$name")...]" ;;
+      *) _bo_die_internal_error "unrecognized cardinality '$cardinality' for argument '$name'" ;;
     esac
   done
   printf '%s' "$line"

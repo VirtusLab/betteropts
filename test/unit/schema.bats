@@ -271,6 +271,11 @@ Line two.
   assert_output --partial "deafult"
 }
 
+@test "_bo_key_allowed denies every key for an unrecognized kind" {
+  run _bo_key_allowed bogus help
+  assert_failure
+}
+
 @test "schema finalization rejects 'multi' on a flag" {
   flag verbose -v --verbose multi
   run _bo_finalize_schema

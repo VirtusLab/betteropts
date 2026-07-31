@@ -35,6 +35,18 @@ setup() {
   assert_success
 }
 
+@test "an unrecognized --long=value option starts passthrough capture" {
+  _bo_parse --author foo --unknown=value
+  _bo_assign_positionals
+  assert_equal "${_bo_passthrough_values[0]}" "--unknown=value"
+}
+
+@test "an unrecognized short option starts passthrough capture" {
+  _bo_parse --author foo -x
+  _bo_assign_positionals
+  assert_equal "${_bo_passthrough_values[0]}" "-x"
+}
+
 @test "a passthrough argument collects zero tokens when nothing follows" {
   _bo_parse --author foo
   _bo_assign_positionals

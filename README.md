@@ -1,5 +1,7 @@
 # BetterOpts
 
+[![CI](https://github.com/VirtusLab/betteropts/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/VirtusLab/betteropts/actions/workflows/ci.yml?query=branch%3Amaster)
+
 BetterOpts is a pure Bash runtime library for declarative command-line
 argument parsing. You declare flags, options, and positional arguments up
 front; the library parses `$@`, validates it, applies defaults, populates

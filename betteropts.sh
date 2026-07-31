@@ -113,6 +113,7 @@ _bo_key_allowed() {
         *) return 1 ;;
       esac
       ;;
+    *) return 1 ;;
   esac
 }
 

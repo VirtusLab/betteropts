@@ -176,26 +176,30 @@ Options
   summary "Plain"
   option output -o --output PATH help="Output directory"
   argument source optional help="Source directory"
-  refute [[ "$(_bo_help_text)" == *"("* ]]
+  run _bo_help_text
+  refute_output --partial "("
 }
 
 @test "help text omits the Arguments section when no arguments are declared" {
   summary "No args"
   flag verbose -v --verbose help="Enable verbose logging"
-  refute [[ "$(_bo_help_text)" == *"Arguments"* ]]
+  run _bo_help_text
+  refute_output --partial "Arguments"
 }
 
 @test "help text omits the description block when none was declared" {
   summary "No description"
   argument source required help="Source directory"
-  refute [[ "$(_bo_help_text)" == *$'\n\n\n'* ]]
+  run _bo_help_text
+  refute_output --partial $'\n\n\n'
 }
 
 @test "help text never mentions --usage or --__complete" {
   summary "Hidden built-ins"
   argument source required help="Source directory"
-  refute [[ "$(_bo_help_text)" == *"--usage"* ]]
-  refute [[ "$(_bo_help_text)" == *"--__complete"* ]]
+  run _bo_help_text
+  refute_output --partial "--usage"
+  refute_output --partial "--__complete"
 }
 
 @test "a long-only flag is labeled without a leading comma" {

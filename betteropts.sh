@@ -34,6 +34,7 @@ betteropts_parse() {
         printf '%s\n' "$(_bo_usage_text)"
         exit 0
         ;;
+      *) ;;
     esac
   done
 

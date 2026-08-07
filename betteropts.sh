@@ -47,7 +47,7 @@ betteropts_parse() {
   _bo_parse "$@" || exit 1
   _bo_assign_positionals || exit 1
   _bo_validate || exit 1
-  _bo_apply_defaults
+  _bo_apply_defaults || exit 1
   _bo_populate
 }
 
@@ -611,6 +611,11 @@ _bo_choice_matches() {
 }
 
 # $1 = display identifier, $2 = raw value, $3 = declared type, $4 = choices csv
+#
+# On success, prints a rewritten value to stdout when the type resolves its
+# input to a canonical form (currently only git-commitish, which prints the
+# full SHA); every other type prints nothing, and callers keep the original
+# value in that case.
 _bo_validate_type() {
   local ident="$1" value="$2" type="$3" choices="$4"
   case "$type" in
@@ -649,10 +654,12 @@ _bo_validate_type() {
         _bo_die_not_in_git_repo "$ident" "$value"
         return 1
       }
-      git rev-parse --verify --quiet "${value}^{commit}" >/dev/null 2>&1 || {
+      local resolved
+      resolved="$(git rev-parse --verify --quiet "${value}^{commit}" 2>/dev/null)" || {
         _bo_die_invalid_value "$ident" "$value" "not a valid git revision"
         return 1
       }
+      printf '%s\n' "$resolved"
       ;;
     git-range)
       _bo_inside_git_work_tree || {
@@ -671,7 +678,7 @@ _bo_validate_type() {
 }
 
 _bo_validate() {
-  local name cardinality count idx value
+  local name cardinality count idx value resolved
 
   for name in "${_bo_options[@]}"; do
     if [[ "$(_bo_meta_get "$name" required)" == "true" && -z "${_bo_provided[$name]:-}" ]]; then
@@ -693,26 +700,29 @@ _bo_validate() {
       count="${_bo_multi_count[$name]:-0}"
       for ((idx = 0; idx < count; idx++)); do
         value="${_bo_multi_values["$name.$idx"]}"
-        _bo_validate_type "$(_bo_display_flag "$name")" "$value" \
-          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+        resolved="$(_bo_validate_type "$(_bo_display_flag "$name")" "$value" \
+          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)")" || return 1
+        [[ -n "$resolved" ]] && _bo_multi_values["$name.$idx"]="$resolved"
       done
     elif [[ -n "${_bo_provided[$name]:-}" ]]; then
-      _bo_validate_type "$(_bo_display_flag "$name")" "${_bo_raw[$name]}" \
-        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+      resolved="$(_bo_validate_type "$(_bo_display_flag "$name")" "${_bo_raw[$name]}" \
+        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)")" || return 1
+      [[ -n "$resolved" ]] && _bo_raw[$name]="$resolved"
     fi
   done
 
   for name in "${_bo_arguments[@]}"; do
     cardinality="$(_bo_meta_get "$name" cardinality)"
     if [[ "$cardinality" == "variadic" ]]; then
-      local value
-      for value in "${_bo_variadic_values[@]}"; do
-        _bo_validate_type "$(_bo_display_argument "$name")" "$value" \
-          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+      for idx in "${!_bo_variadic_values[@]}"; do
+        resolved="$(_bo_validate_type "$(_bo_display_argument "$name")" "${_bo_variadic_values[$idx]}" \
+          "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)")" || return 1
+        [[ -n "$resolved" ]] && _bo_variadic_values[idx]="$resolved"
       done
     elif [[ -n "${_bo_raw[$name]:-}" ]]; then
-      _bo_validate_type "$(_bo_display_argument "$name")" "${_bo_raw[$name]}" \
-        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)" || return 1
+      resolved="$(_bo_validate_type "$(_bo_display_argument "$name")" "${_bo_raw[$name]}" \
+        "$(_bo_meta_get "$name" type)" "$(_bo_meta_get "$name" choices)")" || return 1
+      [[ -n "$resolved" ]] && _bo_raw[$name]="$resolved"
     fi
   done
 
@@ -725,14 +735,22 @@ _bo_validate() {
 # Applied after validation and before variable population: an omitted
 # option or argument that declares a default is filled in with that default
 # value. Like an option's default, an argument's default is trusted as-is
-# and never itself type-checked.
+# and never itself type-checked -- except for type=git-commitish, whose
+# whole point is resolving to a canonical SHA, so its default is run through
+# the same resolution (and, incidentally, the same validation) as a provided
+# value would be. Returns non-zero when that resolution fails.
 # ---------------------------------------------------------------------------
 
 _bo_apply_defaults() {
-  local name cardinality default
+  local name cardinality default type resolved idx
   for name in "${_bo_options[@]}"; do
     if [[ -z "${_bo_provided[$name]:-}" ]] && _bo_meta_has "$name" default; then
-      _bo_raw[$name]="$(_bo_meta_get "$name" default)"
+      default="$(_bo_meta_get "$name" default)"
+      if [[ "$(_bo_meta_get "$name" type)" == "git-commitish" ]]; then
+        resolved="$(_bo_validate_type "$(_bo_display_flag "$name")" "$default" "git-commitish" "")" || return 1
+        default="$resolved"
+      fi
+      _bo_raw[$name]="$default"
     fi
   done
 
@@ -740,14 +758,27 @@ _bo_apply_defaults() {
     _bo_meta_has "$name" default || continue
     default="$(_bo_meta_get "$name" default)"
     cardinality="$(_bo_meta_get "$name" cardinality)"
+    type="$(_bo_meta_get "$name" type)"
     if [[ "$cardinality" == "variadic" ]]; then
       if [[ "${#_bo_variadic_values[@]}" -eq 0 ]]; then
         IFS=',' read -ra _bo_variadic_values <<< "$default"
+        if [[ "$type" == "git-commitish" ]]; then
+          for idx in "${!_bo_variadic_values[@]}"; do
+            resolved="$(_bo_validate_type "$(_bo_display_argument "$name")" "${_bo_variadic_values[$idx]}" "git-commitish" "")" || return 1
+            _bo_variadic_values[idx]="$resolved"
+          done
+        fi
       fi
     elif [[ -z "${_bo_raw[$name]:-}" ]]; then
+      if [[ "$type" == "git-commitish" ]]; then
+        resolved="$(_bo_validate_type "$(_bo_display_argument "$name")" "$default" "git-commitish" "")" || return 1
+        default="$resolved"
+      fi
       _bo_raw[$name]="$default"
     fi
   done
+
+  return 0
 }
 
 # ---------------------------------------------------------------------------

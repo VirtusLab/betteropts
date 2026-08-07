@@ -320,6 +320,123 @@ FILES notanumber (must be an integer)"
 --base HEAD"
 }
 
+@test "type=git-commitish resolves an abbreviated SHA to the full SHA" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base "$(git rev-parse --short HEAD)"
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_raw[base]}" "$GIT_REPO_HEAD"
+}
+
+@test "type=git-commitish resolves a branch name to the full SHA" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base feature-branch
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_raw[base]}" "$GIT_REPO_HEAD"
+}
+
+@test "type=git-commitish resolves a tag name to the full SHA" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base v1.0
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_raw[base]}" "$GIT_REPO_HEAD"
+}
+
+@test "type=git-commitish resolves a relative expression to the full SHA" {
+  setup_git_repo
+  local head_minus_1
+  head_minus_1="$(git rev-parse HEAD~1)"
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base HEAD~1
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_raw[base]}" "$head_minus_1"
+}
+
+@test "type=git-commitish leaves a full SHA unchanged" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish
+  _bo_parse --base "$GIT_REPO_HEAD"
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_raw[base]}" "$GIT_REPO_HEAD"
+}
+
+@test "a multi git-commitish option resolves each occurrence independently" {
+  setup_git_repo
+  local head_minus_1
+  head_minus_1="$(git rev-parse HEAD~1)"
+  option base -b --base VALUE type=git-commitish multi
+  _bo_parse --base HEAD~1 --base HEAD
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_multi_values[base.0]}" "$head_minus_1"
+  assert_equal "${_bo_multi_values[base.1]}" "$GIT_REPO_HEAD"
+}
+
+@test "a variadic git-commitish argument resolves each element" {
+  setup_git_repo
+  local head_minus_1
+  head_minus_1="$(git rev-parse HEAD~1)"
+  argument commits variadic type=git-commitish
+  _bo_parse HEAD~1 HEAD
+  _bo_assign_positionals
+  _bo_validate
+  assert_equal "${_bo_variadic_values[0]}" "$head_minus_1"
+  assert_equal "${_bo_variadic_values[1]}" "$GIT_REPO_HEAD"
+}
+
+@test "an omitted git-commitish option's default=HEAD resolves to the full SHA" {
+  setup_git_repo
+  option base -b --base VALUE type=git-commitish default=HEAD
+  _bo_parse
+  _bo_assign_positionals
+  _bo_validate
+  _bo_apply_defaults
+  assert_equal "${_bo_raw[base]}" "$GIT_REPO_HEAD"
+}
+
+@test "an omitted git-commitish argument's default=HEAD resolves to the full SHA" {
+  setup_git_repo
+  argument commit optional type=git-commitish default=HEAD
+  _bo_parse
+  _bo_assign_positionals
+  _bo_validate
+  _bo_apply_defaults
+  assert_equal "${_bo_raw[commit]}" "$GIT_REPO_HEAD"
+}
+
+@test "a bogus git-commitish default reports Invalid value when omitted" {
+  setup_git_repo
+  argument commit optional type=git-commitish default=does-not-exist
+  _bo_parse
+  _bo_assign_positionals
+  _bo_validate
+  run _bo_apply_defaults
+  assert_failure
+  assert_output "Invalid value:
+
+COMMIT does-not-exist (not a valid git revision)"
+}
+
+@test "a git-commitish default outside a git repository reports Not inside a git repository" {
+  cd "$BATS_TEST_TMPDIR"
+  argument commit optional type=git-commitish default=HEAD
+  _bo_parse
+  _bo_assign_positionals
+  _bo_validate
+  run _bo_apply_defaults
+  assert_failure
+  assert_output "Not inside a git repository:
+
+COMMIT HEAD"
+}
+
 @test "type=git-range accepts a bare revision" {
   setup_git_repo
   option range -r --range VALUE type=git-range

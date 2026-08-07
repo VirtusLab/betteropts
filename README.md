@@ -221,10 +221,16 @@ is trusted as-is and is never itself type-checked.
 
 `type=git-commitish` accepts anything git itself would accept as a
 commit-ish — a SHA (full or abbreviated), branch, tag, or an expression like
-`HEAD~2` — by running `git rev-parse --verify --quiet "<value>^{commit}"`.
-A tree/blob SHA (not a commit) or an unresolvable name is rejected with the
-usual `Invalid value:` error. If the command isn't running inside a git
-repository at all, that's reported distinctly as `Not inside a git
+`HEAD~2` — by running `git rev-parse --verify --quiet "<value>^{commit}"`,
+and populates the variable with that command's output: the full, resolved
+SHA, not the literal input text. `default=HEAD` resolves the same way, so an
+omitted `git-commitish` argument/option populates the current commit's full
+SHA rather than the literal string `HEAD` — the one exception to defaults
+being trusted as-is and never type-checked, since resolving *is* the point
+of this type. A tree/blob SHA (not a commit) or an unresolvable name is
+rejected with the usual `Invalid value:` error (this applies to a bad
+default too, once it's actually used). If the command isn't running inside
+a git repository at all, that's reported distinctly as `Not inside a git
 repository:` rather than letting git's own error for the inner check leak
 through.
 

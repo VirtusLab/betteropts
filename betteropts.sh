@@ -458,6 +458,15 @@ _bo_parse() {
 
     if [[ "$tok" == "--" ]]; then
       after_dashdash=true
+      # For a plain positional/variadic argument, -- is pure syntax ("stop
+      # parsing options") and is dropped, same as getopt. But when the tail
+      # is a passthrough argument, tokens are forwarded raw to whatever the
+      # caller ultimately invokes (e.g. git) - where a literal -- can carry
+      # meaning too (e.g. disambiguating a pathspec from a revision).
+      # Dropping it here would be indistinguishable from the caller never
+      # having typed it, so it's kept - consistent with an unrecognized
+      # flag triggering this same boundary, which is already kept below.
+      _bo_has_passthrough_argument && _bo_positional_tokens+=("$tok")
       i=$((i + 1))
       continue
     fi

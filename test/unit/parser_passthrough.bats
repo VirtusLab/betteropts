@@ -52,3 +52,19 @@ setup() {
   _bo_assign_positionals
   assert_equal "${#_bo_passthrough_values[@]}" "0"
 }
+
+@test "a literal -- that starts the passthrough boundary is itself captured" {
+  _bo_parse --author foo -- --stat -M
+  _bo_assign_positionals
+  assert_equal "${_bo_passthrough_values[0]}" "--"
+  assert_equal "${_bo_passthrough_values[1]}" "--stat"
+  assert_equal "${_bo_passthrough_values[2]}" "-M"
+}
+
+@test "a literal -- appearing after passthrough capture already started is still captured" {
+  _bo_parse --author foo --stat -- bar
+  _bo_assign_positionals
+  assert_equal "${_bo_passthrough_values[0]}" "--stat"
+  assert_equal "${_bo_passthrough_values[1]}" "--"
+  assert_equal "${_bo_passthrough_values[2]}" "bar"
+}

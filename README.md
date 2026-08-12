@@ -148,8 +148,15 @@ A positional argument. Exactly one of `required`, `optional`, `variadic`, or
   and captures every remaining token verbatim into a **bash array** —
   including tokens starting with `-`, with no "Unknown option" error. This
   is the same boundary a literal `--` already creates, just triggered
-  automatically instead of requiring the marker. No `type=`/`choices=`
-  validation applies to passthrough tokens, and no `default=` is supported.
+  automatically instead of requiring the marker. If a literal `--` is what
+  triggers the boundary, it's captured too, as the array's first element -
+  unlike plain `variadic`, where a leading `--` is just syntax and is
+  dropped. This matters because passthrough tokens are typically forwarded
+  raw to another command, where the `--` can itself carry meaning (e.g.
+  disambiguating a pathspec from a revision for `git`); dropping it would
+  be indistinguishable from the caller never having typed it. No
+  `type=`/`choices=` validation applies to passthrough tokens, and no
+  `default=` is supported.
 
 Only one `variadic` **or** `passthrough` argument is allowed per CLI
 (whichever kind it is), and it must be the last one declared (checked at

@@ -132,6 +132,21 @@ Options
   assert_equal "$(_bo_annotations topic)" "required, repeatable, choices: fast, slow, auto"
 }
 
+@test "_bo_annotations shows an option's implicit value" {
+  option notes --notes REF implicit=refs/notes/commits help="Notes ref"
+  assert_equal "$(_bo_annotations notes)" "implicit: refs/notes/commits"
+}
+
+@test "_bo_annotations combines default and implicit for an option" {
+  option mode -m --mode VALUE default=off implicit=on help="Mode"
+  assert_equal "$(_bo_annotations mode)" "default: off, implicit: on"
+}
+
+@test "_bo_annotations combines repeatable and implicit for an option" {
+  option notes --notes REF multi implicit=refs/notes/commits help="Notes ref"
+  assert_equal "$(_bo_annotations notes)" "repeatable, implicit: refs/notes/commits"
+}
+
 @test "_bo_annotations is empty for a plain option" {
   option output -o --output PATH help="Output directory"
   assert_equal "$(_bo_annotations output)" ""

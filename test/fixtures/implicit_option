@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit lastpipe
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Implicit-value option sample"
+
+option notes --notes REF \
+    multi \
+    implicit=refs/notes/commits \
+    help="Show notes from REF"
+
+option mode --mode VALUE \
+    default=off \
+    implicit=on \
+    help="Feature mode"
+
+betteropts_parse "$@"
+
+echo "notes_count=${#notes[@]}"
+echo "notes=${notes[*]:-}"
+echo "mode=$mode"

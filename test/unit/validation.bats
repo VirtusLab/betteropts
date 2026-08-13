@@ -219,6 +219,25 @@ FILES notanumber (must be an integer)"
   assert_success
 }
 
+@test "a bare implicit value is validated like any explicit value" {
+  option mode -m --mode VALUE type=choice choices=on,off implicit=bogus
+  _bo_parse --mode
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output "Invalid value:
+
+--mode bogus (choices: on, off)"
+}
+
+@test "a valid bare implicit value passes validation" {
+  option mode -m --mode VALUE type=choice choices=on,off implicit=on
+  _bo_parse --mode
+  _bo_assign_positionals
+  run _bo_validate
+  assert_success
+}
+
 @test "an optional argument's default is not type-checked" {
   argument count optional type=integer default=notanumber
   _bo_parse

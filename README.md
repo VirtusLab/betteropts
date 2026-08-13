@@ -91,7 +91,7 @@ flag verbose -v --verbose help="Enable verbose logging"
 flag quiet --quiet help="Suppress output"   # long-only is fine
 ```
 
-### `option <name> [-x] [--xxx] METAVAR [required] [type=T] [choices=a,b,c] [default=D] [multi] [var=name] [help="..."]`
+### `option <name> [-x] [--xxx] METAVAR [required] [type=T] [choices=a,b,c] [default=D] [implicit=V] [multi] [var=name] [help="..."]`
 
 A flag that takes a value. `METAVAR` (e.g. `PATH`, `N`) is the placeholder
 name shown in `--help`/usage. Accepts:
@@ -128,6 +128,50 @@ occurrences without `required` populates an empty array, so
 startup, same as the other schema rules above) — there's no single sensible
 meaning for "the default list" when zero, one, or many values may be
 supplied.
+
+Add `implicit=VALUE` to make the option's value optional: a bare occurrence
+(no attached value) is treated exactly as if `implicit`'s value had been
+typed explicitly. This is the pattern behind `git log --notes[=<ref>]`:
+
+```bash
+option notes --notes REF multi implicit=refs/notes/commits \
+    help="Show notes from REF"
+```
+
+```
+git log                              # no notes shown -> notes=()
+git log --notes                      # -> notes=(refs/notes/commits)
+git log --notes=refs/notes/other     # -> notes=(refs/notes/other)
+git log --notes --notes=refs/notes/other   # -> notes=(refs/notes/commits refs/notes/other)
+```
+
+Only `--notes=value` (long form with `=`) attaches an explicit value; a
+following bare token (`--notes value`) is **not** consumed as `--notes`'s
+value — it's left for the next positional/option, matching GNU
+`getopt_long`'s `--opt[=arg]` convention. The short form, if declared, is
+always bare (`-n` behaves like the bare long form; there's no `-nVALUE` or
+`-n value` attachment) — an explicit value always requires `--long=value`.
+
+`implicit=` is orthogonal to `default=` — `default=` still means "value
+used when the option is never provided at all", while `implicit=` means
+"value used when the option is provided bare". The two can be combined:
+
+```bash
+option mode --mode VALUE default=off implicit=on help="Feature mode"
+
+# (not passed at all)   -> mode=off
+# --mode                -> mode=on
+# --mode=custom         -> mode=custom
+```
+
+A bare occurrence's value is recorded through the exact same path an
+explicit value would be, so `type=`/`choices=` validation applies to it
+exactly as it would to a value the user typed — unlike `default=`, which
+stays trusted-as-is and is never validated. `implicit=` combined with
+`multi` and `default=` together remains a schema error, same as `multi` +
+`default=` without `implicit=` — that rule is about "the default list"
+having no single sensible meaning for zero-vs-many occurrences, which
+`implicit=` doesn't resolve.
 
 ### `argument <name> <required|optional|variadic|passthrough> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
 
@@ -282,16 +326,18 @@ schema error rather than silently behaving as `optional`.
 option's or argument's label, summarizing schema facts that would otherwise
 only be visible by reading the CLI's source: `required`, `repeatable` (a
 `multi` option or a `variadic` argument), `default: <value>` (printed
-verbatim, e.g. an unmodified `alice,bob` default list), and `choices: <a, b,
-c>` (for `type=choice`). Only the annotations that actually apply are
-shown; an option or argument with none of these renders exactly as it did
-before. `flag` declarations never gain an annotation — they don't support
-`required`, `multi`, `default=`, or `choices=` at all.
+verbatim, e.g. an unmodified `alice,bob` default list), `implicit: <value>`
+(an option's `implicit=`, printed verbatim), and `choices: <a, b, c>` (for
+`type=choice`). Only the annotations that actually apply are shown; an
+option or argument with none of these renders exactly as it did before.
+`flag` declarations never gain an annotation — they don't support
+`required`, `multi`, `default=`, `implicit=`, or `choices=` at all.
 
 ```bash
 option output -o --output PATH required type=directory help="Output directory"
 option jobs -j --jobs N default=4 type=integer help="Worker count"
 option topic -t --topic VALUE multi type=choice choices=fast,slow,auto help="Note topic to show"
+option notes --notes REF multi implicit=refs/notes/commits help="Show notes from REF"
 ```
 
 renders as:
@@ -305,6 +351,9 @@ renders as:
 
 -t, --topic VALUE (repeatable, choices: fast, slow, auto)
     Note topic to show
+
+--notes REF (repeatable, implicit: refs/notes/commits)
+    Show notes from REF
 ```
 
 ## Calling `betteropts_parse "$@"`

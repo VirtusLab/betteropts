@@ -223,6 +223,46 @@ setup() {
   assert_equal "${topics[0]}" "conflicts"
 }
 
+@test "multi + implicit populates mixed bare and explicit occurrences in order" {
+  option notes --notes REF multi implicit=refs/notes/commits
+  _bo_parse --notes --notes=refs/notes/other
+  _bo_assign_positionals
+  _bo_populate
+  # shellcheck disable=SC2154
+  assert_equal "${#notes[@]}" "2"
+  assert_equal "${notes[0]}" "refs/notes/commits"
+  assert_equal "${notes[1]}" "refs/notes/other"
+}
+
+@test "implicit + default populates all three states" {
+  option mode -m --mode VALUE default=off implicit=on
+
+  _bo_parse
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  # shellcheck disable=SC2154
+  assert_equal "$mode" "off"
+}
+
+@test "a bare implicit-only option populates the implicit value" {
+  option mode -m --mode VALUE default=off implicit=on
+  _bo_parse --mode
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "$mode" "on"
+}
+
+@test "an explicit value overrides both default and implicit" {
+  option mode -m --mode VALUE default=off implicit=on
+  _bo_parse --mode=custom
+  _bo_assign_positionals
+  _bo_apply_defaults
+  _bo_populate
+  assert_equal "$mode" "custom"
+}
+
 @test "populated scalar variables are not exported" {
   option output -o --output PATH
   _bo_parse --output /tmp/out

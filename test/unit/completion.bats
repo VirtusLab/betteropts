@@ -17,6 +17,7 @@ setup() {
   option topic -t --topic VALUE multi type=choice choices=conflicts,builds,tests
   option base -b --base VALUE type=git-commitish
   option range -r --range VALUE type=git-range
+  option notes -n --notes REF implicit=refs/notes/commits
   argument source required type=directory
 }
 
@@ -136,6 +137,22 @@ setup() {
 @test "an earlier already-typed short flag in the replay doesn't consume the next word as its value" {
   flag verbose -v --verbose
   run _bo_complete -- -v --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "a bare implicit-value option (long form) in the replay doesn't consume the next word as its value" {
+  run _bo_complete -- --notes --mode ""
+  assert_success
+  assert_line "fast"
+  assert_line "slow"
+  assert_line "auto"
+}
+
+@test "a bare implicit-value option (short form) in the replay doesn't consume the next word as its value" {
+  run _bo_complete -- -n --mode ""
   assert_success
   assert_line "fast"
   assert_line "slow"

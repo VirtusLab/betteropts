@@ -10,6 +10,7 @@ VARNAMES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/varnames"
 ARG_DEFAULTS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/arg_defaults"
 MULTI_OPTION_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/multi_option"
 PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
+IMPLICIT_OPTION_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/implicit_option"
 
 setup() {
   SRC_DIR="$BATS_TEST_TMPDIR/src"
@@ -190,6 +191,52 @@ setup() {
   assert_success
   assert_line "author=bob"
   assert_line "git_args_count=0"
+}
+
+@test "an implicit-value option is empty when not passed at all" {
+  run "$IMPLICIT_OPTION_FIXTURE"
+  assert_success
+  assert_line "notes_count=0"
+  assert_line "mode=off"
+}
+
+@test "a bare implicit-value option substitutes its implicit value" {
+  run "$IMPLICIT_OPTION_FIXTURE" --notes
+  assert_success
+  assert_line "notes_count=1"
+  assert_line "notes=refs/notes/commits"
+}
+
+@test "an implicit-value option still accepts an explicit --name=value" {
+  run "$IMPLICIT_OPTION_FIXTURE" --notes=refs/notes/other
+  assert_success
+  assert_line "notes_count=1"
+  assert_line "notes=refs/notes/other"
+}
+
+@test "a multi implicit-value option mixes bare and explicit occurrences in order" {
+  run "$IMPLICIT_OPTION_FIXTURE" --notes --notes=refs/notes/other
+  assert_success
+  assert_line "notes_count=2"
+  assert_line "notes=refs/notes/commits refs/notes/other"
+}
+
+@test "implicit= combined with default= covers all three states" {
+  run "$IMPLICIT_OPTION_FIXTURE" --mode
+  assert_success
+  assert_line "mode=on"
+
+  run "$IMPLICIT_OPTION_FIXTURE" --mode=custom
+  assert_success
+  assert_line "mode=custom"
+}
+
+@test "a token after a bare implicit-value option is not consumed as its value" {
+  run "$IMPLICIT_OPTION_FIXTURE" --notes foo
+  assert_failure
+  assert_output "Unexpected argument:
+
+foo"
 }
 
 @test "populated variables are not exported" {

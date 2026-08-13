@@ -104,7 +104,7 @@ _bo_key_allowed() {
       ;;
     option)
       case "$key" in
-        help | type | choices | default | var | metavar) return 0 ;;
+        help | type | choices | default | var | metavar | implicit) return 0 ;;
         *) return 1 ;;
       esac
       ;;
@@ -503,6 +503,9 @@ _bo_parse() {
       if _bo_is_flag "$name"; then
         _bo_provided[$name]="true"
         i=$((i + 1))
+      elif _bo_meta_has "$name" implicit; then
+        _bo_set_option_value "$name" "$(_bo_meta_get "$name" implicit)"
+        i=$((i + 1))
       else
         if (( i + 1 >= n )); then
           _bo_die_missing_value "$name"
@@ -528,6 +531,9 @@ _bo_parse() {
       fi
       if _bo_is_flag "$name"; then
         _bo_provided[$name]="true"
+        i=$((i + 1))
+      elif _bo_meta_has "$name" implicit; then
+        _bo_set_option_value "$name" "$(_bo_meta_get "$name" implicit)"
         i=$((i + 1))
       else
         if (( i + 1 >= n )); then
@@ -861,10 +867,10 @@ _bo_trim_description() {
 
 # The parenthesized, comma-separated annotation list for a declared name's
 # --help entry (e.g. "required, repeatable, choices: a, b, c"), summarizing
-# schema facts (required, multi/variadic, default=, choices=) that would
-# otherwise only be visible by reading the CLI's source. Empty for a flag
-# (flags don't support any of these) and for anything that declares none of
-# them.
+# schema facts (required, multi/variadic, default=, implicit=, choices=)
+# that would otherwise only be visible by reading the CLI's source. Empty
+# for a flag (flags don't support any of these) and for anything that
+# declares none of them.
 _bo_annotations() {
   local name="$1" kind cardinality choices parts=()
   kind="$(_bo_meta_get "$name" kind)"
@@ -880,6 +886,9 @@ _bo_annotations() {
 
   if [[ "$kind" == "option" || "$kind" == "argument" ]]; then
     _bo_meta_has "$name" default && parts+=("default: $(_bo_meta_get "$name" default)")
+    if [[ "$kind" == "option" ]]; then
+      _bo_meta_has "$name" implicit && parts+=("implicit: $(_bo_meta_get "$name" implicit)")
+    fi
     if [[ "$(_bo_meta_get "$name" type)" == "choice" ]]; then
       choices="$(_bo_meta_get "$name" choices)"
       parts+=("choices: ${choices//,/, }")
@@ -1031,7 +1040,7 @@ _bo_complete() {
       break
     fi
 
-    if [[ -n "$name" ]] && ! _bo_is_flag "$name"; then
+    if [[ -n "$name" ]] && ! _bo_is_flag "$name" && ! _bo_meta_has "$name" implicit; then
       if (( i + 1 < n - 1 )); then
         i=$((i + 2))
       else

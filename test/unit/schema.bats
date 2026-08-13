@@ -118,6 +118,16 @@ Line two.
   assert_equal "$(_bo_meta_get topic multi)" ""
 }
 
+@test "option records an implicit value" {
+  option notes --notes REF implicit=refs/notes/commits
+  assert_equal "$(_bo_meta_get notes implicit)" "refs/notes/commits"
+}
+
+@test "option has no implicit value by default" {
+  option notes --notes REF
+  assert_equal "$(_bo_meta_get notes implicit)" ""
+}
+
 @test "argument records cardinality, type and help" {
   argument source required type=directory help="Source directory"
   assert_equal "$(_bo_meta_get source cardinality)" "required"
@@ -212,6 +222,44 @@ Line two.
   option topic -t --topic VALUE multi default=fast
   run _bo_finalize_schema
   assert_failure
+}
+
+@test "schema finalization still rejects a default combined with multi when implicit is also present" {
+  option topic -t --topic VALUE multi default=fast implicit=fast
+  run _bo_finalize_schema
+  assert_failure
+}
+
+@test "schema finalization accepts implicit combined with default" {
+  option mode -m --mode VALUE default=off implicit=on
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts implicit combined with required" {
+  option notes --notes REF required implicit=refs/notes/commits
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization accepts implicit combined with multi and no default" {
+  option notes --notes REF multi implicit=refs/notes/commits
+  run _bo_finalize_schema
+  assert_success
+}
+
+@test "schema finalization rejects implicit on a flag" {
+  flag verbose -v --verbose implicit=on
+  run _bo_finalize_schema
+  assert_failure
+  assert_output --partial "implicit"
+}
+
+@test "schema finalization rejects implicit on an argument" {
+  argument source required implicit=foo
+  run _bo_finalize_schema
+  assert_failure
+  assert_output --partial "implicit"
 }
 
 @test "schema finalization rejects 'optional' on an option" {
@@ -386,6 +434,7 @@ Line two.
   option output -o --output PATH required type=directory help="Output directory"
   option jobs -j --jobs N default=4 type=integer help="Worker count"
   option topic -t --topic VALUE multi type=choice choices=fast,slow,auto var=topics help="Topics"
+  option mode -m --mode VALUE default=off implicit=on help="Feature mode"
   argument source required type=directory var=input_dir help="Source directory"
   argument destination optional type=directory default=. help="Destination directory"
   argument files variadic help="Extra files"

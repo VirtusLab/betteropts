@@ -117,10 +117,12 @@ SOURCE $BATS_TEST_TMPDIR/nope (no such directory)"
 
 @test "type=git-commitish accepts a full SHA, a branch, and a relative expression" {
   setup_git_repo
+  local head_minus_1
+  head_minus_1="$(git rev-parse HEAD~1)"
   run "$GIT_COMMITISH_FIXTURE" --base "$GIT_REPO_HEAD" HEAD~1
   assert_success
   assert_line "base=$GIT_REPO_HEAD"
-  assert_line "commit=HEAD~1"
+  assert_line "commit=$head_minus_1"
 }
 
 @test "type=git-commitish rejects a nonexistent ref" {
@@ -132,11 +134,11 @@ SOURCE $BATS_TEST_TMPDIR/nope (no such directory)"
 --base does-not-exist (not a valid git revision)"
 }
 
-@test "an omitted git-commitish argument's default is applied without being validated" {
+@test "an omitted git-commitish argument's default is resolved to the full SHA" {
   setup_git_repo
   run "$GIT_COMMITISH_FIXTURE" --base "$GIT_REPO_HEAD"
   assert_success
-  assert_line "commit=HEAD"
+  assert_line "commit=$GIT_REPO_HEAD"
 }
 
 @test "type=git-commitish reports a distinct error outside a git repository" {

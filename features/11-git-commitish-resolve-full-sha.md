@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Not yet implemented.
+Implemented.
 
 ## Problem
 

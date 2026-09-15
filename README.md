@@ -320,6 +320,14 @@ An `argument` must declare **exactly one** of `required`, `optional`,
 `variadic`, or `passthrough` — declaring none, or more than one, is also a
 schema error rather than silently behaving as `optional`.
 
+A `type=` value that isn't one of the recognized types (a typo like
+`type=int` instead of `type=integer`) is rejected the same way, rather than
+silently being treated as no type constraint:
+
+```
+'int' is not a recognized type for option 'jobs'.
+```
+
 ### Help text annotations
 
 `--help` appends a parenthesized, comma-separated annotation list after an

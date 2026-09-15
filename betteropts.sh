@@ -231,6 +231,15 @@ _bo_finalize_schema() {
       echo "'$(_bo_meta_get "$name" bad_keyword)' is not a valid $kind modifier for '$name'." >&2
       return 1
     fi
+    if _bo_meta_has "$name" type; then
+      case "$(_bo_meta_get "$name" type)" in
+        string | integer | float | file | directory | choice | git-commitish | git-range) ;;
+        *)
+          echo "'$(_bo_meta_get "$name" type)' is not a recognized type for $kind '$name'." >&2
+          return 1
+          ;;
+      esac
+    fi
   done
 
   for name in "${_bo_options[@]}"; do

@@ -333,6 +333,33 @@ Line two.
   assert_output --partial "deafult"
 }
 
+@test "schema finalization rejects an unrecognized type value on an option" {
+  option jobs -j --jobs N type=int
+  run _bo_finalize_schema
+  assert_failure
+  assert_output "'int' is not a recognized type for option 'jobs'."
+}
+
+@test "schema finalization rejects an unrecognized type value on an argument" {
+  argument source required type=dir
+  run _bo_finalize_schema
+  assert_failure
+  assert_output "'dir' is not a recognized type for argument 'source'."
+}
+
+@test "schema finalization accepts every documented type name" {
+  option a -a --a A type=string
+  option b -b --b B type=integer
+  option c -c --c C type=float
+  option d -d --d D type=file
+  option e -e --e E type=directory
+  option f -f --f F type=choice choices=x,y
+  option g -g --g G type=git-commitish
+  option h -h --h H type=git-range
+  run _bo_finalize_schema
+  assert_success
+}
+
 @test "_bo_key_allowed denies every key for an unrecognized kind" {
   run _bo_key_allowed bogus help
   assert_failure

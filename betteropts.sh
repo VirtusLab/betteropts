@@ -838,7 +838,27 @@ _bo_populate() {
 _bo_command_name="${_bo_command_name:-}"
 
 _bo_usage_line() {
-  local line="$_bo_command_name [OPTIONS]" name cardinality
+  local line="$_bo_command_name" name cardinality token metavar
+  for name in "${_bo_flags_and_options[@]}"; do
+    token="$(_bo_display_flag "$name")"
+    if [[ "$(_bo_meta_get "$name" kind)" == "option" ]]; then
+      metavar="$(_bo_meta_get "$name" metavar)"
+      metavar="${metavar:-VALUE}"
+      if _bo_meta_has "$name" implicit; then
+        # An implicit option accepts an explicit value only as --long=value.
+        [[ -n "$(_bo_meta_get "$name" long)" ]] && token+="[=$metavar]"
+      else
+        token+=" $metavar"
+      fi
+    fi
+    if [[ "$(_bo_meta_get "$name" required)" == "true" ]]; then
+      line+=" $token"
+      [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && line+=" [$token]..."
+    else
+      line+=" [$token]"
+      [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && line+="..."
+    fi
+  done
   for name in "${_bo_arguments[@]}"; do
     cardinality="$(_bo_meta_get "$name" cardinality)"
     case "$cardinality" in

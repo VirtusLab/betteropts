@@ -8,6 +8,7 @@ set -euo pipefail
 FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
 PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
 ANNOTATIONS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/annotations"
+IMPLICIT_OPTION_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/implicit_option"
 
 @test "--usage prints summary and usage line only" {
   run "$FIXTURE" --usage
@@ -16,7 +17,7 @@ ANNOTATIONS_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/annotations"
 
 Usage:
 
-build [OPTIONS] SOURCE [DESTINATION]"
+build [--verbose] [--force] --output PATH [--jobs N] SOURCE [DESTINATION]"
   assert_output "$expected"
 }
 
@@ -38,7 +39,7 @@ Supports incremental and parallel builds.
 
 Usage:
 
-build [OPTIONS] SOURCE [DESTINATION]
+build [--verbose] [--force] --output PATH [--jobs N] SOURCE [DESTINATION]
 
 Arguments
 
@@ -112,7 +113,7 @@ Options
 
 Usage:
 
-annotations [OPTIONS] SOURCE [REVIEWERS...]
+annotations --output PATH [--jobs N] [--topic VALUE]... SOURCE [REVIEWERS...]
 
 Arguments
 
@@ -136,4 +137,23 @@ Options
 -h, --help
     Show this help"
   assert_output "$expected"
+}
+
+@test "--usage shows implicit optional values without descriptions or annotations" {
+  run "$IMPLICIT_OPTION_FIXTURE" --usage
+  assert_success
+  expected="Implicit-value option sample
+
+Usage:
+
+implicit_option [--notes[=REF]]... [--mode[=VALUE]]"
+  assert_output "$expected"
+}
+
+@test "--help uses the same implicit synopsis and retains detailed annotations" {
+  run "$IMPLICIT_OPTION_FIXTURE" --help
+  assert_success
+  assert_line "implicit_option [--notes[=REF]]... [--mode[=VALUE]]"
+  assert_line "--notes REF (repeatable, implicit: refs/notes/commits)"
+  assert_line "--mode VALUE (default: off, implicit: on)"
 }

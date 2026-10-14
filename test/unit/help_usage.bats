@@ -13,37 +13,78 @@ setup() {
   _bo_command_name="build"
 }
 
-@test "usage line always includes [OPTIONS]" {
+@test "usage line expands declared flags and options in declaration order" {
+  flag verbose -v --verbose
+  option output -o --output PATH required
+  flag force -f --force
+  option jobs -j --jobs N default=4 type=integer help="Worker count"
   argument source required
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS] SOURCE"
+  assert_equal "$(_bo_usage_line)" "build [--verbose] --output PATH [--force] [--jobs N] SOURCE"
+}
+
+@test "usage line falls back to short names and retains value metavars" {
+  flag quiet -q
+  option output -o PATH required
+  option jobs -j N
+  flag force --force
+  assert_equal "$(_bo_usage_line)" "build [-q] -o PATH [-j N] [--force]"
+}
+
+@test "usage line repeats whole optional and required multi occurrences" {
+  option topic -t --topic VALUE multi type=choice choices=fast,slow,auto
+  option include -i --include PATH required multi
+  assert_equal "$(_bo_usage_line)" "build [--topic VALUE]... --include PATH [--include PATH]..."
+}
+
+@test "usage line shows attached optional values for implicit long options" {
+  option notes -n --notes REF multi implicit=refs/notes/commits
+  option mode --mode VALUE required implicit=on default=off
+  assert_equal "$(_bo_usage_line)" "build [--notes[=REF]]... --mode[=VALUE]"
+}
+
+@test "usage line repeats required implicit multi occurrences" {
+  option notes --notes REF required multi implicit=refs/notes/commits
+  assert_equal "$(_bo_usage_line)" "build --notes[=REF] [--notes[=REF]]..."
+}
+
+@test "usage line keeps short-only implicit options bare" {
+  option notes -n REF implicit=refs/notes/commits
+  assert_equal "$(_bo_usage_line)" "build [-n]"
+}
+
+@test "usage line uses VALUE for missing or empty option metavars" {
+  option output --output
+  option mode --mode implicit=on
+  option input -i metavar=
+  assert_equal "$(_bo_usage_line)" "build [--output VALUE] [--mode[=VALUE]] [-i VALUE]"
 }
 
 @test "usage line marks a required argument bare" {
   argument source required
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS] SOURCE"
+  assert_equal "$(_bo_usage_line)" "build SOURCE"
 }
 
 @test "usage line brackets an optional argument" {
   argument source required
   argument destination optional
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS] SOURCE [DESTINATION]"
+  assert_equal "$(_bo_usage_line)" "build SOURCE [DESTINATION]"
 }
 
 @test "usage line brackets a variadic argument with an ellipsis" {
   argument files variadic
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS] [FILES...]"
+  assert_equal "$(_bo_usage_line)" "build [FILES...]"
 }
 
 @test "usage line brackets a passthrough argument with an ellipsis" {
   argument git_args passthrough
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS] [GIT_ARGS...]"
+  assert_equal "$(_bo_usage_line)" "build [GIT_ARGS...]"
 }
 
-@test "usage line has no argument tokens when none are declared" {
-  assert_equal "$(_bo_usage_line)" "build [OPTIONS]"
+@test "usage line shows only the command when no entries are declared" {
+  assert_equal "$(_bo_usage_line)" "build"
 }
 
-@test "usage text matches the DESIGN.MD worked example" {
+@test "usage text includes only summary and synopsis" {
   summary "Build a project"
   argument source required
   argument destination optional
@@ -51,11 +92,11 @@ setup() {
 
 Usage:
 
-build [OPTIONS] SOURCE [DESTINATION]"
+build SOURCE [DESTINATION]"
   assert_equal "$(_bo_usage_text)" "$expected"
 }
 
-@test "help text matches the DESIGN.MD worked example" {
+@test "help text expands the synopsis and retains detailed entries" {
   summary "Build a project"
   description "
 Compile a project and write the resulting artifacts.
@@ -77,7 +118,7 @@ Supports incremental and parallel builds.
 
 Usage:
 
-build [OPTIONS] SOURCE [DESTINATION]
+build [--verbose] [--force] --output PATH [--jobs N] SOURCE [DESTINATION]
 
 Arguments
 

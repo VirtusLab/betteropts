@@ -328,6 +328,32 @@ silently being treated as no type constraint:
 'int' is not a recognized type for option 'jobs'.
 ```
 
+### Usage synopsis
+
+`--usage` prints the summary and a single usage line; `--help` includes the
+same line before its detailed entries. The quick-start CLI renders as:
+
+```text
+build [--verbose] [--force] --output PATH [--jobs N] SOURCE [DESTINATION]
+```
+
+Declared flags and options appear in declaration order, using the long
+name when available and the short name otherwise. Optional entries are
+bracketed; required options and arguments are bare. Value-taking options
+include their metavar (or `VALUE` when it is missing or empty), and
+variadic/passthrough arguments retain their `[NAME...]` form. The synopsis
+omits descriptions and help annotations.
+Built-in commands remain outside the synopsis; `-h, --help` still appears
+in detailed help.
+
+An `implicit=` option uses `--name[=METAVAR]` to show that an explicit value
+must be attached with `=`; a short-only implicit option is shown bare,
+since its short form cannot attach a value. A `multi` option uses
+`[--name METAVAR]...` when optional and
+`--name METAVAR [--name METAVAR]...` when required, so the ellipsis repeats
+the whole occurrence rather than suggesting several values follow one
+option name.
+
 ### Help text annotations
 
 `--help` appends a parenthesized, comma-separated annotation list after an

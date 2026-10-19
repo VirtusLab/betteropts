@@ -50,10 +50,8 @@ engine output alone does not prove the resulting interactive insertion.
    adapter delegation is already tested in
    [`completion.bats`](../test/unit/completion.bats); interactive sorting
    and replacement are not established by that test.
-3. Add targeted required/default/`var=` completion checks: these modifiers
-   must not rename CLI candidates or invoke population/default application
-   during completion. The existing matrix has inspected architecture,
-   not a dedicated runtime cross-product, for those interactions.
+3. Requiredness, defaults and `var=` must not rename CLI candidates, apply defaults or populate outputs during attached-value completion.
+   Add dedicated regressions that invoke completion in the same shell before checking output variables and raw default storage, so a subprocess cannot hide those side effects.
 
 ## Backward compatibility and dependencies
 

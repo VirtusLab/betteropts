@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2154
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+
+summary "Record-valued option sample"
+option question -q --question multi fields=label,value,passage \
+  value.type=choice value.choices=high,medium,low \
+  help="Record a question verdict"
+flag verbose -v --verbose
+argument file optional
+
+betteropts_parse "$@"
+
+printf 'count=%s\n' "${#question_label[@]}"
+for i in "${!question_label[@]}"; do
+  printf 'label=%s\nvalue=%s\npassage=%s\n' \
+    "${question_label[$i]}" "${question_value[$i]}" "${question_passage[$i]}"
+done
+printf 'verbose=%s\nfile=%s\n' "$verbose" "$file"

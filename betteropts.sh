@@ -104,8 +104,8 @@ _bo_key_allowed() {
       ;;
     option)
       case "$key" in
-        help | type | choices | default | var | metavar | implicit) return 0 ;;
-        *) return 1 ;;
+        help | type | choices | default | var | metavar | implicit | fields) return 0 ;;
+        *) [[ "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*\.(type|choices)$ ]] ;;
       esac
       ;;
     argument)
@@ -153,6 +153,9 @@ _bo_declare() {
         local key="${tok%%=*}"
         if _bo_key_allowed "$kind" "$key"; then
           _bo_meta_set "$name" "$key" "${tok#*=}"
+          if [[ "$key" == *.* ]]; then
+            _bo_meta_set "$name" field_keys "$(_bo_meta_get "$name" field_keys) $key"
+          fi
         else
           _bo_meta_set "$name" bad_key "$key"
         fi
@@ -216,6 +219,98 @@ argument() {
   _bo_arguments+=("$name")
 }
 
+# Fields remain schema metadata; consumers never inspect their storage.
+_bo_field_names() {
+  local fields
+  fields="$(_bo_meta_get "$1" fields)"
+  printf '%s\n' "${fields//,/$'\n'}"
+}
+
+_bo_option_arity() {
+  if _bo_meta_has "$1" fields; then
+    local fields=()
+    IFS=',' read -ra fields <<< "$(_bo_meta_get "$1" fields)"
+    printf '%s' "${#fields[@]}"
+  else
+    printf '1'
+  fi
+}
+
+_bo_known_type() {
+  case "$1" in
+    string | integer | float | file | directory | choice | git-commitish | git-range) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_bo_finalize_fields() {
+  local name="$1" fields field key type prefix output other other_field other_output
+  local seen=()
+  fields="$(_bo_meta_get "$name" fields)"
+  if [[ ! "$fields" =~ ^[a-zA-Z_][a-zA-Z0-9_]*(,[a-zA-Z_][a-zA-Z0-9_]*)*$ ]]; then
+    echo "Invalid fields= list '$fields' for option '$name' (expected comma-separated shell identifiers)." >&2
+    return 1
+  fi
+  for key in metavar type choices default implicit; do
+    if _bo_meta_has "$name" "$key"; then
+      echo "Option '$name' cannot combine fields= with $key=." >&2
+      return 1
+    fi
+  done
+  prefix="$(_bo_meta_get "$name" var)"
+  if [[ ! "$prefix" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ || "$prefix" == _bo || "$prefix" == _bo_* ]]; then
+    echo "Invalid field variable prefix '$prefix' for option '$name'." >&2
+    return 1
+  fi
+  while IFS= read -r field; do
+    for key in "${seen[@]}"; do
+      if [[ "$key" == "$field" ]]; then
+        echo "Duplicate field '$field' for option '$name'." >&2
+        return 1
+      fi
+    done
+    seen+=("$field")
+    type="$(_bo_meta_get "$name" "$field.type")"
+    if _bo_meta_has "$name" "$field.type" && ! _bo_known_type "$type"; then
+      echo "'$type' is not a recognized type for field '$field' of option '$name'." >&2
+      return 1
+    fi
+    if _bo_meta_has "$name" "$field.choices" && [[ "$type" != choice ]]; then
+      echo "Field '$field' of option '$name' requires type=choice for choices=." >&2
+      return 1
+    fi
+    if [[ "$type" == choice ]] && [[ -z "$(_bo_meta_get "$name" "$field.choices")" ]]; then
+      echo "Field '$field' of option '$name' requires nonempty choices=." >&2
+      return 1
+    fi
+    output="${prefix}_${field}"
+    for other in "${_bo_flags_and_options[@]}" "${_bo_arguments[@]}"; do
+      [[ "$other" == "$name" ]] && continue
+      if _bo_meta_has "$other" fields; then
+        while IFS= read -r other_field; do
+          other_output="$(_bo_meta_get "$other" var)_$other_field"
+          if [[ "$output" == "$other_output" ]]; then
+            echo "Field variable '$output' for option '$name' collides with '$other'." >&2
+            return 1
+          fi
+        done < <(_bo_field_names "$other")
+      elif [[ "$output" == "$(_bo_meta_get "$other" var)" ]]; then
+        echo "Field variable '$output' for option '$name' collides with '$other'." >&2
+        return 1
+      fi
+    done
+  done < <(_bo_field_names "$name")
+  local keys=()
+  IFS=' ' read -ra keys <<< "$(_bo_meta_get "$name" field_keys)"
+  for key in "${keys[@]}"; do
+    field="${key%%.*}"
+    if [[ ",$fields," != *",$field,"* ]]; then
+      echo "Unknown field '$field' for option '$name'." >&2
+      return 1
+    fi
+  done
+}
+
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
@@ -231,18 +326,19 @@ _bo_finalize_schema() {
       echo "'$(_bo_meta_get "$name" bad_keyword)' is not a valid $kind modifier for '$name'." >&2
       return 1
     fi
-    if _bo_meta_has "$name" type; then
-      case "$(_bo_meta_get "$name" type)" in
-        string | integer | float | file | directory | choice | git-commitish | git-range) ;;
-        *)
-          echo "'$(_bo_meta_get "$name" type)' is not a recognized type for $kind '$name'." >&2
-          return 1
-          ;;
-      esac
+    if _bo_meta_has "$name" type && ! _bo_known_type "$(_bo_meta_get "$name" type)"; then
+      echo "'$(_bo_meta_get "$name" type)' is not a recognized type for $kind '$name'." >&2
+      return 1
     fi
   done
 
   for name in "${_bo_options[@]}"; do
+    if _bo_meta_has "$name" fields; then
+      _bo_finalize_fields "$name" || return 1
+    elif _bo_meta_has "$name" field_keys; then
+      echo "Option '$name' requires fields= for field attributes." >&2
+      return 1
+    fi
     if [[ "$(_bo_meta_get "$name" multi)" == "true" ]] && _bo_meta_has "$name" default; then
       echo "A multi option cannot declare a default." >&2
       return 1
@@ -393,6 +489,21 @@ declare -ga _bo_variadic_values=()
 declare -ga _bo_passthrough_values=()
 declare -gA _bo_multi_values=()
 declare -gA _bo_multi_count=()
+declare -gA _bo_field_values=()
+
+_bo_set_option_fields() {
+  local name="$1" field idx=0
+  shift
+  if [[ "$(_bo_meta_get "$name" multi)" == true ]]; then
+    idx="${_bo_multi_count[$name]:-0}"
+  fi
+  while IFS= read -r field; do
+    _bo_field_values["$name.$idx.$field"]="$1"
+    shift
+  done < <(_bo_field_names "$name")
+  _bo_provided[$name]=true
+  _bo_multi_count[$name]=$((idx + 1))
+}
 
 # Records an occurrence of a (possibly multi) option's value: appended to an
 # ordered per-name list for `multi` options, overwritten otherwise.
@@ -452,6 +563,7 @@ _bo_parse() {
   _bo_positional_tokens=()
   _bo_multi_values=()
   _bo_multi_count=()
+  _bo_field_values=()
 
   local args=("$@") after_dashdash=false
   local i=0 n=${#args[@]}
@@ -492,8 +604,18 @@ _bo_parse() {
         _bo_die_unknown_option "$tok"
         return 1
       fi
-      _bo_set_option_value "$name" "$value"
-      i=$((i + 1))
+      if _bo_meta_has "$name" fields; then
+        local remaining=$(( $(_bo_option_arity "$name") - 1 ))
+        if (( i + remaining >= n )); then
+          _bo_die_missing_value "$name"
+          return 1
+        fi
+        _bo_set_option_fields "$name" "$value" "${args[@]:i+1:remaining}"
+        i=$((i + remaining + 1))
+      else
+        _bo_set_option_value "$name" "$value"
+        i=$((i + 1))
+      fi
       continue
     fi
 
@@ -516,12 +638,18 @@ _bo_parse() {
         _bo_set_option_value "$name" "$(_bo_meta_get "$name" implicit)"
         i=$((i + 1))
       else
-        if (( i + 1 >= n )); then
+        local arity
+        arity="$(_bo_option_arity "$name")"
+        if (( i + arity >= n )); then
           _bo_die_missing_value "$name"
           return 1
         fi
-        _bo_set_option_value "$name" "${args[$((i + 1))]}"
-        i=$((i + 2))
+        if _bo_meta_has "$name" fields; then
+          _bo_set_option_fields "$name" "${args[@]:i+1:arity}"
+        else
+          _bo_set_option_value "$name" "${args[$((i + 1))]}"
+        fi
+        i=$((i + arity + 1))
       fi
       continue
     fi
@@ -545,12 +673,18 @@ _bo_parse() {
         _bo_set_option_value "$name" "$(_bo_meta_get "$name" implicit)"
         i=$((i + 1))
       else
-        if (( i + 1 >= n )); then
+        local arity
+        arity="$(_bo_option_arity "$name")"
+        if (( i + arity >= n )); then
           _bo_die_missing_value "$name"
           return 1
         fi
-        _bo_set_option_value "$name" "${args[$((i + 1))]}"
-        i=$((i + 2))
+        if _bo_meta_has "$name" fields; then
+          _bo_set_option_fields "$name" "${args[@]:i+1:arity}"
+        else
+          _bo_set_option_value "$name" "${args[$((i + 1))]}"
+        fi
+        i=$((i + arity + 1))
       fi
       continue
     fi
@@ -713,7 +847,17 @@ _bo_validate() {
   done
 
   for name in "${_bo_options[@]}"; do
-    if [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
+    if _bo_meta_has "$name" fields; then
+      local field
+      count="${_bo_multi_count[$name]:-0}"
+      for ((idx = 0; idx < count; idx++)); do
+        while IFS= read -r field; do
+          _bo_validate_type "$(_bo_display_flag "$name") ${field^^}" \
+            "${_bo_field_values["$name.$idx.$field"]}" \
+            "$(_bo_meta_get "$name" "$field.type")" "$(_bo_meta_get "$name" "$field.choices")" || return 1
+        done < <(_bo_field_names "$name")
+      done
+    elif [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
       count="${_bo_multi_count[$name]:-0}"
       for ((idx = 0; idx < count; idx++)); do
         value="${_bo_multi_values["$name.$idx"]}"
@@ -799,7 +943,21 @@ _bo_populate() {
 
   for name in "${_bo_options[@]}"; do
     var="$(_bo_meta_get "$name" var)"
-    if [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
+    if _bo_meta_has "$name" fields; then
+      local field field_var
+      while IFS= read -r field; do
+        field_var="${var}_${field}"
+        if [[ "$(_bo_meta_get "$name" multi)" == true ]]; then
+          declare -ga "$field_var=()"
+          count="${_bo_multi_count[$name]:-0}"
+          for ((i = 0; i < count; i++)); do
+            declare -g "${field_var}[$i]=${_bo_field_values["$name.$i.$field"]}"
+          done
+        else
+          declare -g "$field_var=${_bo_field_values["$name.0.$field"]:-}"
+        fi
+      done < <(_bo_field_names "$name")
+    elif [[ "$(_bo_meta_get "$name" multi)" == "true" ]]; then
       declare -ga "$var=()"
       count="${_bo_multi_count[$name]:-0}"
       for ((i = 0; i < count; i++)); do
@@ -837,12 +995,25 @@ _bo_populate() {
 # _bo_usage_line/_bo_usage_text/_bo_help_text directly.
 _bo_command_name="${_bo_command_name:-}"
 
+_bo_option_metavars() {
+  local name="$1" field joined=""
+  if _bo_meta_has "$name" fields; then
+    while IFS= read -r field; do
+      [[ -n "$joined" ]] && joined+=" "
+      joined+="${field^^}"
+    done < <(_bo_field_names "$name")
+    printf '%s' "$joined"
+  else
+    _bo_meta_get "$name" metavar
+  fi
+}
+
 _bo_usage_line() {
   local line="$_bo_command_name" name cardinality token metavar
   for name in "${_bo_flags_and_options[@]}"; do
     token="$(_bo_display_flag "$name")"
     if [[ "$(_bo_meta_get "$name" kind)" == "option" ]]; then
-      metavar="$(_bo_meta_get "$name" metavar)"
+      metavar="$(_bo_option_metavars "$name")"
       metavar="${metavar:-VALUE}"
       if _bo_meta_has "$name" implicit; then
         # An implicit option accepts an explicit value only as --long=value.
@@ -918,6 +1089,15 @@ _bo_annotations() {
     if [[ "$kind" == "option" ]]; then
       _bo_meta_has "$name" implicit && parts+=("implicit: $(_bo_meta_get "$name" implicit)")
     fi
+    if _bo_meta_has "$name" fields; then
+      local field
+      while IFS= read -r field; do
+        if [[ "$(_bo_meta_get "$name" "$field.type")" == choice ]]; then
+          choices="$(_bo_meta_get "$name" "$field.choices")"
+          parts+=("${field^^} choices: ${choices//,/, }")
+        fi
+      done < <(_bo_field_names "$name")
+    fi
     if [[ "$(_bo_meta_get "$name" type)" == "choice" ]]; then
       choices="$(_bo_meta_get "$name" choices)"
       parts+=("choices: ${choices//,/, }")
@@ -948,7 +1128,7 @@ _bo_option_label() {
     label="$short"
   fi
   if [[ "$(_bo_meta_get "$name" kind)" == "option" ]]; then
-    metavar="$(_bo_meta_get "$name" metavar)"
+    metavar="$(_bo_option_metavars "$name")"
     [[ -n "$metavar" ]] && label+=" $metavar"
   fi
   annotations="$(_bo_annotations "$name")"
@@ -1013,10 +1193,11 @@ _bo_complete_choice() {
 }
 
 _bo_complete_value() {
-  local name="$1" partial="$2" type
-  type="$(_bo_meta_get "$name" type)"
+  local name="$1" partial="$2" field="${3:-}" type key=""
+  [[ -n "$field" ]] && key="$field."
+  type="$(_bo_meta_get "$name" "${key}type")"
   case "$type" in
-    choice) _bo_complete_choice "$partial" "$(_bo_meta_get "$name" choices)" ;;
+    choice) _bo_complete_choice "$partial" "$(_bo_meta_get "$name" "${key}choices")" ;;
     file) compgen -f -- "$partial" || true ;;
     directory) compgen -d -- "$partial" || true ;;
     *) ;;
@@ -1051,47 +1232,77 @@ _bo_complete() {
   (( n == 0 )) && return 0
 
   local partial="${words[$((n - 1))]}"
-  local i=0 awaiting_name="" positional_count=0 past_passthrough_boundary=false
+  local i=0 awaiting_name="" awaiting_field="" remaining=0 consumed=0 positional_count=0
+  local past_passthrough_boundary=false after_dashdash=false
+  local fields=()
 
   while (( i < n - 1 )); do
-    local tok="${words[$i]}" name=""
-    if [[ "$tok" == --*=* ]]; then
+    local tok="${words[$i]}" name="" attached=false
+    if (( remaining > 0 )); then
+      remaining=$((remaining - 1))
+      consumed=$((consumed + 1))
       i=$((i + 1))
       continue
+    fi
+    awaiting_name=""
+    if [[ "$after_dashdash" == true ]]; then
+      positional_count=$((positional_count + 1))
+      i=$((i + 1))
+      continue
+    fi
+    if [[ "$tok" == -- ]]; then
+      if _bo_has_passthrough_argument; then
+        past_passthrough_boundary=true
+        break
+      fi
+      after_dashdash=true
+      i=$((i + 1))
+      continue
+    elif [[ "$tok" == --*=* ]]; then
+      name="$(_bo_find_by_long "${tok%%=*}")" || true
+      attached=true
     elif [[ "$tok" == --* ]]; then
       name="$(_bo_find_by_long "$tok")" || true
     elif [[ "$tok" == -?* ]]; then
       name="$(_bo_find_by_short "$tok")" || true
     fi
 
+    if [[ "$attached" == true && -n "$name" ]] && _bo_is_flag "$name"; then
+      name=""
+    fi
+
     if [[ -z "$name" && "$tok" == -* ]] && _bo_has_passthrough_argument; then
       past_passthrough_boundary=true
       break
     fi
-
-    if [[ -n "$name" ]] && ! _bo_is_flag "$name" && ! _bo_meta_has "$name" implicit; then
-      if (( i + 1 < n - 1 )); then
-        i=$((i + 2))
-      else
+    if [[ -n "$name" ]] && ! _bo_is_flag "$name"; then
+      if [[ "$attached" == true ]] || ! _bo_meta_has "$name" implicit; then
         awaiting_name="$name"
-        i=$((i + 1))
+        remaining="$(_bo_option_arity "$name")"
+        consumed=0
+        if [[ "$attached" == true ]]; then
+          remaining=$((remaining - 1))
+          consumed=1
+        fi
       fi
-    elif [[ -n "$name" ]]; then
-      i=$((i + 1))
-    else
+    elif [[ -z "$name" && "$attached" == false ]]; then
       positional_count=$((positional_count + 1))
-      i=$((i + 1))
     fi
+    i=$((i + 1))
   done
 
-  [[ "$past_passthrough_boundary" == "true" ]] && return 0
+  [[ "$past_passthrough_boundary" == true ]] && return 0
 
-  if [[ -n "$awaiting_name" ]]; then
-    _bo_complete_value "$awaiting_name" "$partial"
+  if (( remaining > 0 )); then
+    if _bo_meta_has "$awaiting_name" fields; then
+      IFS=',' read -ra fields <<< "$(_bo_meta_get "$awaiting_name" fields)"
+      awaiting_field="${fields[$consumed]}"
+    fi
+    _bo_complete_value "$awaiting_name" "$partial" "$awaiting_field"
     return 0
   fi
 
-  if [[ "$partial" == -* ]]; then
+  if [[ "$after_dashdash" == false && "$partial" == -* ]]; then
     _bo_complete_option_names "$partial"
     return 0
   fi

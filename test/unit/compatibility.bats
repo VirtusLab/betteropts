@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Bats isolates tests; mutations in one test's subshell cannot affect another.
-# shellcheck disable=SC2030,SC2031
+# shellcheck disable=SC2030,SC2031,SC2154
 
 load '../../support/bats-support/load'
 load '../../support/bats-assert/load'
@@ -14,32 +14,76 @@ setup() {
   # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   _bo_command_name=compat
-  COMPAT_DIMENSIONS=(required optional variadic passthrough multi type choices default implicit var help metavar bare short long)
-  COMPAT_TOKENS=(required optional variadic passthrough multi type=integer 'choices=1,2' default=1 implicit=1 var=compat_value help=example metavar=N N -n --number)
+  COMPAT_DIMENSIONS=(required optional variadic passthrough multi type choices default implicit var help metavar bare short long fields field_type field_choices)
+  COMPAT_FIELD_START=15
+  COMPAT_TOKENS=(required optional variadic passthrough multi type=integer 'choices=1,2' default=1 implicit=1 var=compat_value help=example metavar=N N -n --number 'fields=left,right' left.type=choice 'left.choices=1,2')
 }
 
 # Independent applicability inventory and named pair exclusions from README.
 # If two tokens are independently invalid, either relevant rejection is valid;
 # schema diagnostic priority is deliberately not part of the matrix contract.
 compat_expected() {
-  local kind="$1" dimension token allowed first="${2-}" second="${3-}"
-  shift
+  local kind="$1" context="$2" dimension token allowed first="${3-}" second="${4-}"
+  local has_fields=false has_field_type=false has_field_choices=false
+  shift 2
   COMPAT_ERRORS=()
   case "$kind" in
     flag) allowed=' var help short long ' ;;
-    option) allowed=' required multi type choices default implicit var help metavar bare short long ' ;;
+    option) allowed=' required multi type choices default implicit var help metavar bare short long fields field_type field_choices ' ;;
     argument) allowed=' required optional variadic passthrough type choices default var help short long ' ;;
     *) return 1 ;;
   esac
+  if [[ "$context" == record ]]; then
+    has_fields=true has_field_type=true has_field_choices=true
+    if [[ "$kind" != option ]]; then
+      for token in fields left.type left.choices; do
+        COMPAT_ERRORS+=("'$token' is not a recognized attribute for $kind 'item'.")
+      done
+    fi
+  fi
   for dimension in "$@"; do
+    case "$dimension" in
+      fields) has_fields=true ;;
+      field_type) has_field_type=true ;;
+      field_choices) has_field_choices=true ;;
+      *) ;;
+    esac
     [[ "$allowed" == *" $dimension "* ]] && continue
     token="$dimension"
-    [[ "$dimension" == bare ]] && token=N
     case "$dimension" in
-      type|choices|default|implicit|metavar) COMPAT_ERRORS+=("'$token' is not a recognized attribute for $kind 'item'.") ;;
+      bare) token=N ;;
+      field_type) token=left.type ;;
+      field_choices) token=left.choices ;;
+      *) ;;
+    esac
+    case "$dimension" in
+      type|choices|default|implicit|metavar|fields|field_type|field_choices)
+        COMPAT_ERRORS+=("'$token' is not a recognized attribute for $kind 'item'.") ;;
       *) COMPAT_ERRORS+=("'$token' is not a valid $kind modifier for 'item'.") ;;
     esac
   done
+  (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0
+  if [[ "$kind" == option ]]; then
+    if [[ "$has_fields" == true ]]; then
+      for dimension in "$@"; do
+        token="$dimension"
+        [[ "$dimension" == bare ]] && token=metavar
+        case "$dimension" in
+          type|choices|default|implicit|metavar|bare)
+            COMPAT_ERRORS+=("Option 'item' cannot combine fields= with $token=.") ;;
+          *) ;;
+        esac
+      done
+      (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0
+      if [[ "$has_field_choices" == true && "$has_field_type" == false ]]; then
+        COMPAT_ERRORS+=("Field 'left' of option 'item' requires type=choice for choices=.")
+      elif [[ "$has_field_type" == true && "$has_field_choices" == false ]]; then
+        COMPAT_ERRORS+=("Field 'left' of option 'item' requires nonempty choices=.")
+      fi
+    elif [[ "$has_field_type" == true || "$has_field_choices" == true ]]; then
+      COMPAT_ERRORS+=("Option 'item' requires fields= for field attributes.")
+    fi
+  fi
   (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0
   case "$kind:$first:$second" in
     option:multi:default|option:default:multi) COMPAT_ERRORS+=('A multi option cannot declare a default.') ;;
@@ -55,11 +99,14 @@ compat_expected() {
 }
 
 compat_schema() (
-  local kind="$1" dimension cardinality=false
+  local kind="$1" context="$2" dimension cardinality=false
   local -a tokens=()
-  shift
+  shift 2
   # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
+  if [[ "$context" == record ]]; then
+    tokens=('fields=left,right' left.type=choice 'left.choices=1,2')
+  fi
   for dimension in "$@"; do
     tokens+=("${COMPAT_TOKENS[$dimension]}")
     case "${COMPAT_DIMENSIONS[$dimension]}" in
@@ -75,24 +122,24 @@ compat_schema() (
 )
 
 compat_check() {
-  local kind="$1" index actual expected actual_status=0
+  local kind="$1" context="$2" index actual expected actual_status=0
   local -a dimensions=()
-  shift
+  shift 2
   for index in "$@"; do dimensions+=("${COMPAT_DIMENSIONS[$index]}"); done
-  compat_expected "$kind" "${dimensions[@]}"
+  compat_expected "$kind" "$context" "${dimensions[@]}"
   # Expected schema failures are captured and checked below.
   # shellcheck disable=SC2310
-  actual="$(compat_schema "$kind" "$@" 2>&1)" || actual_status=$?
+  actual="$(compat_schema "$kind" "$context" "$@" 2>&1)" || actual_status=$?
   if [[ "${#COMPAT_ERRORS[@]}" == 0 ]]; then
     if [[ "$actual_status" != 0 || -n "$actual" ]]; then
-      printf 'Expected accepted schema: %s %s; status=%s output=%s\n' "$kind" "${dimensions[*]}" "$actual_status" "$actual" >&2
+      printf 'Expected accepted schema: %s context=%s %s; status=%s output=%s\n' "$kind" "$context" "${dimensions[*]}" "$actual_status" "$actual" >&2
       return 1
     fi
   else
     if [[ "$actual_status" == 1 ]]; then
       for expected in "${COMPAT_ERRORS[@]}"; do [[ "$actual" == "$expected" ]] && return 0; done
     fi
-    printf 'Wrong rejection: %s %s; status=%s output=%s; expected one of=%s\n' "$kind" "${dimensions[*]}" "$actual_status" "$actual" "${COMPAT_ERRORS[*]}" >&2
+    printf 'Wrong rejection: %s context=%s %s; status=%s output=%s; expected one of=%s\n' "$kind" "$context" "${dimensions[*]}" "$actual_status" "$actual" "${COMPAT_ERRORS[*]}" >&2
     return 1
   fi
 }
@@ -100,14 +147,14 @@ compat_check() {
 @test "C01 every declaration dimension has checked applicability for every kind" {
   local kind i
   for kind in flag option argument; do
-    for i in "${!COMPAT_DIMENSIONS[@]}"; do compat_check "$kind" "$i"; done
+    for i in "${!COMPAT_DIMENSIONS[@]}"; do compat_check "$kind" plain "$i"; done
   done
 }
 
 compat_pairs() {
   local kind="$1" i j
   for i in "${!COMPAT_DIMENSIONS[@]}"; do
-    for j in "${!COMPAT_DIMENSIONS[@]}"; do compat_check "$kind" "$i" "$j"; done
+    for j in "${!COMPAT_DIMENSIONS[@]}"; do compat_check "$kind" plain "$i" "$j"; done
   done
 }
 
@@ -305,26 +352,35 @@ compat_pairs() {
   assert_equal "${extra[*]}" 'operand --unknown --item 2'
 }
 
-@test "C13 completion disagrees with parsing after an attached unknown passthrough option" {
+@test "C13 completion agrees with parsing after an attached unknown passthrough option" {
   option item --item N
   argument extra passthrough
   _bo_parse --unknown=value --item 1
   _bo_assign_positionals
   assert_equal "${_bo_passthrough_values[*]}" '--unknown=value --item 1'
   run _bo_complete -- --unknown=value --it
-  assert_output --item
+  assert_output ''
   run _bo_complete -- --unknown --it
   assert_output ''
 }
 
-@test "C14 completion replays literal double dash incorrectly without passthrough" {
+@test "C14 completion honors literal double dash and keeps the correct positional slot" {
   option item --item N
   argument extra variadic type=choice choices=one,two
   _bo_parse -- --item 1
   _bo_assign_positionals
   assert_equal "${_bo_variadic_values[*]}" '--item 1'
   run _bo_complete -- -- --it
-  assert_output --item
+  assert_output ''
+  run _bo_complete -- -- o
+  assert_output one
+  # A marker is syntax, not the first positional value.
+  # shellcheck source=../../betteropts.sh
+  source "$BETTEROPTS"
+  argument first required type=choice choices=first
+  argument second optional type=choice choices=second
+  run _bo_complete -- -- ''
+  assert_output first
 }
 
 @test "C15 current attached values do not complete while earlier attachments replay" {
@@ -536,4 +592,379 @@ Use --help for usage."
   run _bo_validate
   assert_failure
   assert_output $'Invalid value:\n\n--item compat-dir (no such file)'
+}
+
+@test "C30 field axes have checked ordered pairs and repetitions in an explicit record context" {
+  local kind i j checked=0
+  # This is a conditional context, not evidence that two attributes alone
+  # suffice: fields=left,right and a complete choice field precede the pair.
+  for kind in flag option argument; do
+    for i in "${!COMPAT_DIMENSIONS[@]}"; do
+      for j in "${!COMPAT_DIMENSIONS[@]}"; do
+        (( i < COMPAT_FIELD_START && j < COMPAT_FIELD_START )) && continue
+        compat_check "$kind" record "$i" "$j"
+        checked=$((checked + 1))
+      done
+    done
+  done
+  assert_equal "$checked" "$((3 * (${#COMPAT_DIMENSIONS[@]} ** 2 - COMPAT_FIELD_START ** 2)))"
+}
+
+compat_finish() {
+  _bo_assign_positionals
+  _bo_validate
+  _bo_apply_defaults
+  _bo_populate
+}
+
+@test "C31 repeated field keys use the final schema while unknown and orphaned attributes remain errors" {
+  option item --item fields=discarded fields=left,right \
+    left.type=integer left.type=choice left.choices=bad left.choices=1,2
+  _bo_finalize_schema
+  _bo_parse --item 1 'kept text'
+  compat_finish
+  assert_equal "${item_left-}" 1
+  assert_equal "${item_right-}" 'kept text'
+  [[ ! -v item_discarded ]]
+  local tokens
+  for tokens in orphan typo invalid_choice; do
+    (
+      # shellcheck source=../../betteropts.sh
+      source "$BETTEROPTS"
+      case "$tokens" in
+        orphan) option item --item fields=old old.type=string fields=new ;;
+        typo) option item --item fields=left left.typo=x left.type=string ;;
+        invalid_choice) option item --item fields=left left.choices=1,2 left.type=choice left.type=integer ;;
+        *) return 1 ;;
+      esac
+      run _bo_finalize_schema
+      assert_failure
+      case "$tokens" in
+        orphan) assert_output "Unknown field 'old' for option 'item'." ;;
+        typo) assert_output "'left.typo' is not a recognized attribute for option 'item'." ;;
+        invalid_choice) assert_output "Field 'left' of option 'item' requires type=choice for choices=." ;;
+        *) return 1 ;;
+      esac
+    )
+  done
+}
+
+@test "C32 every field type preserves values in optional required scalar and repeated records" {
+  setup_git_repo
+  local type_index mode type value
+  local -a types=(string integer float file directory choice git-commitish git-range)
+  local -a values=('literal text' -2 -2.5 "$BATS_TEST_TMPDIR/file.txt" "$BATS_TEST_TMPDIR" 1 HEAD HEAD..HEAD)
+  for type_index in "${!types[@]}"; do
+    type="${types[$type_index]}" value="${values[$type_index]}"
+    for mode in scalar required multi required_multi; do
+      (
+        # shellcheck source=../../betteropts.sh
+        source "$BETTEROPTS"
+        local -a modifiers=()
+        [[ "$mode" == required* ]] && modifiers+=(required)
+        [[ "$mode" == *multi ]] && modifiers+=(multi)
+        [[ "$type" == choice ]] && modifiers+=('value.choices=1,2')
+        option item -n --item fields=label,value,passage "value.type=$type" var=record "${modifiers[@]}"
+        _bo_finalize_schema
+        _bo_parse --item first "$value" 'quoted passage' "--item=second" "$value" 'final passage'
+        compat_finish
+        if [[ "$mode" == *multi ]]; then
+          assert_equal "${#record_value[@]}" 2
+          assert_equal "${record_label[0]}" first
+          assert_equal "${record_label[1]}" second
+          assert_equal "${record_value[0]}" "$value"
+          assert_equal "${record_value[1]}" "$value"
+          assert_equal "${record_passage[1]}" 'final passage'
+        else
+          assert_equal "${record_label-}" second
+          assert_equal "${record_value-}" "$value"
+          assert_equal "${record_passage-}" 'final passage'
+        fi
+      )
+    done
+  done
+}
+
+@test "C33 every field type checks nonempty invalid and empty retained values with scalar and multi parity" {
+  setup_git_repo
+  local type mode sample
+  for type in string integer float file directory choice git-commitish git-range; do
+    for mode in scalar multi; do
+      for sample in compat-invalid ''; do
+        (
+          # shellcheck source=../../betteropts.sh
+          source "$BETTEROPTS"
+          local -a modifiers=()
+          [[ "$mode" == multi ]] && modifiers+=(multi)
+          [[ "$type" == choice ]] && modifiers+=('value.choices=1,2')
+          option item --item fields=key,value required "value.type=$type" "${modifiers[@]}"
+          _bo_finalize_schema
+          _bo_parse --item key "$sample"
+          run _bo_validate
+          if [[ "$type" == string ]]; then
+            assert_success
+          else
+            assert_failure
+            assert_output --partial '--item VALUE '
+            assert_output --partial 'Invalid value:'
+          fi
+        )
+      done
+    done
+  done
+}
+
+@test "C34 record scalars validate retained occurrences while repeated records validate each one" {
+  option item --item fields=key,value value.type=integer
+  _bo_finalize_schema
+  _bo_parse --item old invalid --item=new -2
+  compat_finish
+  assert_equal "${item_key-}" new
+  assert_equal "${item_value-}" -2
+  _bo_meta_set item multi true
+  _bo_parse --item old invalid --item=new -2
+  run _bo_validate
+  assert_failure
+  assert_output $'Invalid value:\n\n--item VALUE invalid (must be an integer)'
+}
+
+@test "C35 several record arities coexist with ordinary required default implicit repeated and flag options" {
+  flag verbose -v --verbose
+  option ordinary --ordinary required type=integer
+  option jobs --jobs type=integer default=trusted-invalid-default
+  option mode -m --mode MODE implicit=on default=off type=choice choices=on,off
+  option tag -t --tag T multi type=choice choices=a,b
+  argument source required type=integer
+  option pair -p --pair required multi fields=key,value value.type=integer var=record
+  option triple --triple fields=label,path,note path.type=directory var=entry
+  option single --single fields=token
+  argument destination optional default=unvalidated type=integer
+  argument extra variadic type=integer default=unvalidated,also-unvalidated
+  _bo_finalize_schema
+  _bo_parse --single before --ordinary invalid -p first -1 10 --mode -v \
+    --triple sample "$BATS_TEST_TMPDIR" 'literal note' --ordinary=2 -t a \
+    --pair=second 3 -v --single=last -t b
+  compat_finish
+  assert_equal "${verbose-}" true
+  assert_equal "${ordinary-}" 2
+  assert_equal "${jobs-}" trusted-invalid-default
+  assert_equal "${mode-}" on
+  assert_equal "${tag[*]}" 'a b'
+  assert_equal "${record_key[*]}" 'first second'
+  assert_equal "${record_value[*]}" '-1 3'
+  assert_equal "${entry_path-}" "$BATS_TEST_TMPDIR"
+  assert_equal "${entry_note-}" 'literal note'
+  assert_equal "${single_token-}" last
+  assert_equal "${source-}" 10
+  assert_equal "${destination-}" unvalidated
+  assert_equal "${extra[*]}" 'unvalidated also-unvalidated'
+  assert_equal "$(_bo_usage_line)" 'compat [--verbose] --ordinary VALUE [--jobs VALUE] [--mode[=MODE]] [--tag T]... --pair KEY VALUE [--pair KEY VALUE]... [--triple LABEL PATH NOTE] [--single TOKEN] SOURCE [DESTINATION] [EXTRA...]'
+  _bo_parse --ordinary 2 10
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output $'Missing required option:\n\n--pair'
+  _bo_parse --pair only 1 10
+  _bo_assign_positionals
+  run _bo_validate
+  assert_failure
+  assert_output $'Missing required option:\n\n--ordinary'
+}
+
+@test "C36 record tokens do not occupy positional slots or change positional typing and default rules" {
+  local mode
+  for mode in required optional variadic passthrough; do
+    (
+      # shellcheck source=../../betteropts.sh
+      source "$BETTEROPTS"
+      option record --record fields=key,value multi value.type=integer
+      local -a modifiers=(type=integer)
+      [[ "$mode" == optional || "$mode" == variadic ]] && modifiers+=(default=trusted-invalid-default)
+      argument item "$mode" "${modifiers[@]}"
+      _bo_finalize_schema
+      _bo_parse 1 --record first -2 --record=second 3
+      compat_finish
+      assert_equal "${record_key[*]}" 'first second'
+      assert_equal "${record_value[*]}" '-2 3'
+      assert_equal "${item[0]-}" 1
+      _bo_parse --record first 2 ''
+      _bo_assign_positionals
+      run _bo_validate
+      case "$mode" in
+        required) assert_failure; assert_output $'Missing required argument:\n\nITEM' ;;
+        variadic) assert_failure; assert_output --partial 'must be an integer' ;;
+        optional|passthrough) assert_success ;;
+        *) return 1 ;;
+      esac
+      if [[ "$mode" == optional || "$mode" == variadic ]]; then
+        _bo_parse --record only 1
+        compat_finish
+        assert_equal "${item[0]-}" trusted-invalid-default
+      elif [[ "$mode" == passthrough ]]; then
+        _bo_parse --record only 1 --unknown=literal --record ignored 2
+        compat_finish
+        assert_equal "${record_key[*]}" only
+        assert_equal "${item[*]}" '--unknown=literal --record ignored 2'
+      fi
+    )
+  done
+}
+
+@test "C37 generated field output collisions reject every declaration kind in either declaration order" {
+  local kind order
+  for kind in flag option argument record; do
+    for order in before after; do
+      (
+        # shellcheck source=../../betteropts.sh
+        source "$BETTEROPTS"
+        [[ "$order" == before ]] && option item --item fields=key,value var=record
+        case "$kind" in
+          flag) flag other --other var=record_value ;;
+          option) option other --other var=record_value ;;
+          argument) argument other optional var=record_value ;;
+          record) option other --other fields=value var=record ;;
+          *) return 1 ;;
+        esac
+        [[ "$order" == after ]] && option item --item fields=key,value var=record
+        run _bo_finalize_schema
+        assert_failure
+        assert_output --partial "Field variable 'record_value'"
+      )
+    done
+  done
+  # The unused base prefix itself is not an output, so this is valid.
+  option item --item fields=key,value var=record
+  option base --base var=record
+  _bo_finalize_schema
+  _bo_parse --item k v --base scalar
+  compat_finish
+  assert_equal "${record-}" scalar
+  assert_equal "${record_key-}" k
+  assert_equal "${record_value-}" v
+}
+
+@test "C38 field shape type choice and prefix errors stay distinct from ordinary permissive metadata" {
+  local bad
+  for bad in list prefix attribute kind type empty_choices missing_choices inert_choices; do
+    (
+      # shellcheck source=../../betteropts.sh
+      source "$BETTEROPTS"
+      case "$bad" in
+        list) option item --item fields=left,left ;;
+        prefix) option item --item fields=left var=_bo_raw ;;
+        attribute) option item --item fields=left left.default=1 ;;
+        kind) argument item optional fields=left ;;
+        type) option item --item fields=left left.type=int ;;
+        empty_choices) option item --item fields=left left.type=choice left.choices= ;;
+        missing_choices) option item --item fields=left left.type=choice ;;
+        inert_choices) option item --item fields=left left.type=string left.choices=1,2 ;;
+        *) return 1 ;;
+      esac
+      run _bo_finalize_schema
+      assert_failure
+      case "$bad" in
+        list) assert_output "Duplicate field 'left' for option 'item'." ;;
+        prefix) assert_output --partial 'Invalid field variable prefix' ;;
+        attribute) assert_output "'left.default' is not a recognized attribute for option 'item'." ;;
+        kind) assert_output "'fields' is not a recognized attribute for argument 'item'." ;;
+        type) assert_output "'int' is not a recognized type for field 'left' of option 'item'." ;;
+        empty_choices|missing_choices) assert_output "Field 'left' of option 'item' requires nonempty choices=." ;;
+        inert_choices) assert_output "Field 'left' of option 'item' requires type=choice for choices=." ;;
+        *) return 1 ;;
+      esac
+    )
+  done
+}
+
+@test "C39 completion distinguishes record fields mandatory scalar values and actual markers" {
+  option record -r --record fields=key,value multi value.type=choice value.choices=alpha,beta
+  option ordinary -n --ordinary N type=choice choices=one,two
+  option implicit -i --implicit N implicit=one type=choice choices=one,two
+  flag verbose -v --verbose
+  argument first required type=choice choices=first
+  argument second optional type=choice choices=second
+  _bo_finalize_schema
+  run _bo_complete -- --record -- a
+  assert_output alpha
+  run _bo_complete -- --record=-- b
+  assert_output beta
+  run _bo_complete -- -r --verbose alpha --ordinary -- --record next b
+  assert_output beta
+  run _bo_complete -- -i -r x alpha --ordinary=o --record another a
+  assert_output alpha
+  run _bo_complete -- --record x alpha -- ''
+  assert_output first
+  run _bo_complete -- --record x alpha -- first ''
+  assert_output second
+  run _bo_complete -- --record x alpha -- --ver
+  assert_output ''
+}
+
+@test "C40 attached unknown options and attached flags stop completion before and after records" {
+  option record --record fields=key,value value.type=choice value.choices=alpha,beta
+  flag verbose --verbose
+  argument first optional
+  argument extra passthrough
+  _bo_finalize_schema
+  local token
+  for token in --unknown=value --verbose=true; do
+    _bo_parse "$token" --record k alpha
+    _bo_assign_positionals
+    assert_equal "${_bo_raw[first]}" "$token"
+    assert_equal "${_bo_passthrough_values[*]}" '--record k alpha'
+    run _bo_complete -- "$token" --rec
+    assert_output ''
+    run _bo_complete -- --record k alpha "$token" --rec
+    assert_output ''
+  done
+  # The same tokens in a mandatory field slot remain literal field data.
+  run _bo_complete -- --record --verbose=true a
+  assert_output alpha
+  run _bo_complete -- --record --unknown=value b
+  assert_output beta
+}
+
+@test "C41 file field completion retains directory candidates and required default var metadata is not applied" {
+  cd "$BATS_TEST_TMPDIR"
+  mkdir compat-dir
+  : > compat-file
+  option record --record required fields=key,path var=verdict path.type=file
+  option ordinary --ordinary required default=unvalidated type=choice choices=one,two var=other
+  _bo_finalize_schema
+  _bo_complete -- --record=key compat- > "$BATS_TEST_TMPDIR/completion-candidates"
+  [[ ! -v verdict_path && ! -v other ]]
+  [[ -z "${_bo_raw[ordinary]+set}" ]]
+  run cat "$BATS_TEST_TMPDIR/completion-candidates"
+  assert_success
+  assert_line compat-dir
+  assert_line compat-file
+  _bo_parse --record key compat-dir
+  run _bo_validate
+  assert_failure
+  assert_output $'Missing required option:\n\n--ordinary'
+  _bo_parse --ordinary one --record key compat-dir
+  run _bo_validate
+  assert_failure
+  assert_output $'Invalid value:\n\n--record PATH compat-dir (no such file)'
+}
+
+@test "C42 omitted Git fields need no repository while provided fields report the repository error" {
+  mkdir "$BATS_TEST_TMPDIR/no-repository"
+  cd "$BATS_TEST_TMPDIR/no-repository"
+  local type
+  for type in git-commitish git-range; do
+    (
+      # shellcheck source=../../betteropts.sh
+      source "$BETTEROPTS"
+      option item --item fields=key,value multi "value.type=$type"
+      _bo_finalize_schema
+      _bo_parse
+      compat_finish
+      assert_equal "${#item_value[@]}" 0
+      _bo_parse --item key HEAD
+      run _bo_validate
+      assert_failure
+      assert_output $'Not inside a git repository:\n\n--item VALUE HEAD'
+    )
+  done
 }

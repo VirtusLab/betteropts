@@ -2,8 +2,7 @@
 
 ## Status
 
-Partly implemented through [fixed-arity option fields](15-fixed-arity-options.md#declaration-and-output).
-Explicit-marker and attached-token replay rules below are implemented for ordinary and record options.
+Implemented for explicit markers, attached tokens and bare-minus replay for ordinary and record options.
 Broader bare-token and earlier-slot passthrough policy remains unresolved under [passthrough boundary contract](16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions).
 
 ## Implemented replay rules
@@ -27,17 +26,17 @@ Completion candidates after real markers or unknown attachments therefore differ
 
 ## Bare-minus replay
 
-A bare `-` is positional to `_bo_parse`, but `_bo_complete` treats it as an unknown dash token when passthrough exists and stops offering candidates.
+A bare `-` is positional to both `_bo_parse` and `_bo_complete`, including when passthrough exists.
 For an option `--item` followed by a passthrough argument, parsing `- --item 1` still recognizes the option and keeps `-` positional.
-Completion of the prefix `- --it` must therefore continue to offer `--item` before a genuine boundary.
+Completion of the prefix `- --it` therefore continues to offer `--item` before a genuine boundary.
 
-Correct replay to advance the positional count for a bare `-` instead of starting passthrough capture.
+Replay advances the positional count for a bare `-` instead of starting passthrough capture.
 This correction is independent of the undecided broader bare-token and earlier-slot policies in [passthrough boundary contract](16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions), because it follows the parser's existing classification of this exact token.
 A `-` consumed by a mandatory value slot remains literal value data and must not advance a positional slot.
 
 ## Intended outcome and acceptance
 
-The remaining bare-minus correction must preserve the implemented replay rules above.
+The bare-minus correction preserves the implemented replay rules above.
 
 1. Add dedicated bare-minus regressions with and without passthrough, including multiple typed positional slots and known-option completion after `-`.
    Assert that `-` advances one positional slot, while a consumed value of `-` advances none.
@@ -50,6 +49,9 @@ The remaining bare-minus correction must preserve the implemented replay rules a
    Cover required/optional/variadic slots, earlier scalar slots before passthrough, short/long values, known/unknown attachments, implicit and multi options.
 4. Keep option-name and value completion sourced from the schema without new public API or duplicated metadata.
    Sharing replay state with parsing is an implementation choice.
+
+Dedicated [boundary replay regressions](../test/unit/completion_boundary_replay.bats) cover positional selection, mandatory value/field slots, implicit and repeated options, and genuine boundaries.
+The [completion integration suite](../test/integration/completion.bats) also checks known-option completion after a bare `-` through the command's completion protocol.
 
 ## Remaining policy and compatibility
 

@@ -56,7 +56,8 @@ but does not establish which replacement policy callers need.
 2. Cover known options before/after bare words, unknown short/long/attached
    options, mandatory values, implicit options, repeated options, `--`, and
    earlier required/optional slots. Assert exact token preservation.
-3. Add the missing dedicated bare `-` check: it is currently positional,
+3. Preserve the dedicated bare `-` regressions from
+   [17](17-completion-boundary-replay.md#intended-outcome-and-acceptance): it is currently positional,
    unlike a dash followed by more characters (`_bo_parse`, independently
    trialled in the baseline audit). Include negative positionals before
    and after a real boundary; do not treat that syntax as a new defect.

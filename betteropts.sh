@@ -1271,7 +1271,7 @@ _bo_complete() {
       name=""
     fi
 
-    if [[ -z "$name" && "$tok" == -* ]] && _bo_has_passthrough_argument; then
+    if [[ -z "$name" && "$tok" == -?* ]] && _bo_has_passthrough_argument; then
       past_passthrough_boundary=true
       break
     fi

@@ -7,6 +7,23 @@ set -euo pipefail
 
 TYPES_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/types"
 BUILD_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/build"
+PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
+
+@test "--__complete recognizes options after a bare minus before passthrough capture" {
+  run "$PASSTHROUGH_FIXTURE" - --author alice
+  assert_success
+  assert_line author=alice
+  assert_line git_args=-
+  run "$PASSTHROUGH_FIXTURE" --__complete -- - --aut
+  assert_success
+  assert_output --author
+  run "$PASSTHROUGH_FIXTURE" --__complete -- - --author - --aut
+  assert_success
+  assert_output --author
+  run "$PASSTHROUGH_FIXTURE" --__complete -- - --unknown --aut
+  assert_success
+  assert_output ''
+}
 
 @test "--__complete lists all choices for an empty choice-option prefix" {
   run "$TYPES_FIXTURE" --__complete -- --mode ""

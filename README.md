@@ -450,6 +450,9 @@ Read the applicability table before the pairwise table and runtime rules.
 `S` means supported within the stated applicability; `X` means rejected; `C` means conditional on its numbered rule; `I` means accepted but ignored in that context.
 A schema-accepted pair does not make arbitrary values or dependent combinations valid.
 The tables include current quirks whose unresolved policies belong to the linked feature records.
+Acceptance, including `I`, does not establish permission under the intended grammar.
+[Passthrough attribute rejection](features/19-inert-declaration-policy.md#passthrough-declaration-attributes) and the [proposed positional-spelling correction](features/19-inert-declaration-policy.md#positional-spelling-correction) distinguish unsupported declarations from the current behavior recorded below.
+[Lossless metadata retrieval](features/19-inert-declaration-policy.md#lossless-metadata-retrieval) covers literal-value preservation and exact structural validation that simple declaration pairs do not establish.
 
 ### Declaration applicability
 
@@ -480,7 +483,7 @@ Per-field attributes use an actual declared field name in place of `<field>`.
 Unknown keys, invalid keywords and unknown types are rejected at schema finalization.
 An argument must declare exactly one cardinality; ordinary options need not declare a metavar.
 The ordinary examples assume unique schema names, unique spellings, distinct valid Bash output variables and conventional `-x` / `--long` names.
-Other ordinary identities have unresolved policies under [schema identity validation](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions); duplicate spellings/output variables and reserved spellings are currently accepted with lookup, population and built-in precedence.
+[Concrete identity and metadata-isolation corrections](features/22-schema-identity-validation.md#concrete-schema-and-integrity-corrections) are separate from the remaining [identity policy choices](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions); duplicate spellings/output variables and reserved spellings are currently accepted with lookup, population and built-in precedence.
 Record field names and prefixes follow the stricter [field identity contract](features/15-fixed-arity-options.md#schema-rules), including rejection of generated output collisions.
 
 ### Complete pairwise declaration matrix

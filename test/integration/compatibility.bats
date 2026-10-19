@@ -80,7 +80,9 @@ compat_cli() {
 }
 
 compat_records_cli() {
+  # kcov tracing needs a BASH_SOURCE frame before nounset is enabled.
   bash -c '
+  compat_records_main() {
     set -euo pipefail
     IFS=$(printf "\n\t")
     source "$1"
@@ -104,6 +106,8 @@ compat_records_cli() {
     done
     printf "ordinary=%s\nmode=%s\nverbose=%s\nfirst=%s\n" "$ordinary" "$mode" "$verbose" "$first"
     for value in "${extra[@]}"; do printf "extra=%s\n" "$value"; done
+  }
+  compat_records_main "$@"
   ' compat "$BETTEROPTS" "$@"
 }
 

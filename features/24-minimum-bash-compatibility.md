@@ -36,6 +36,7 @@ Neither a version increase nor a claim of Bash 4.2 incompatibility follows from 
    Resolve failures and interpreter leakage before treating the minimum-version promise as verified.
    Keep Git/filesystem/completion paths and literal-data cases in the suite rather than substituting a reduced syntax-only check.
 4. Preserve the established test coverage and shell checks while introducing the compatibility jobs.
+   Verify representative library function-body coverage events from inline `bash -c` commands and fixture CLIs, because passing tests alone do not establish subprocess instrumentation.
    Keep CI infrastructure dependencies separate from runtime requirements.
 5. Keep the supported-version statement and the executable CI selection consistent when the support policy changes.
    A missing interpreter or an unintended fallback must fail the compatibility job visibly.

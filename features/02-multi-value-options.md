@@ -50,9 +50,12 @@ option topic -t --topic VALUE multi \
   value to an ordered list instead of overwriting a scalar.
 - `_bo_populate` declares the variable as an array (`declare -ga "$var"`)
   instead of a scalar, one element per occurrence, in the order given.
-- `type=`/`choices=` validation applies to *each* value independently, same
-  rule as a non-multi option — a single bad value among several still fails
-  validation and reports which value/option failed.
+- After parsing, `type=`/`choices=` validation applies to *each* retained
+  value independently — a single bad value among several still fails
+  validation and reports which value/option failed. A non-multi option
+  retains and validates only its final occurrence; overwritten scalar
+  values are not checked. Explicit and implicit values follow the same
+  rule (see [21](21-retained-scalar-validation-contract.md)).
 - `required` + `multi` means "at least one occurrence is required" (zero
   occurrences is a `Missing required option` error, same message shape as
   today).

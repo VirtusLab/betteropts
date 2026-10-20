@@ -86,7 +86,10 @@ option mode --mode VALUE default=off implicit=on \
 - **Validation**: because a bare occurrence is recorded through the exact
   same path as an explicit value, `type=`/`choices=` validation applies to
   a substituted `implicit` exactly as it would if the user had typed
-  it — unlike `default=`, which stays "trusted as-is, never validated"
+  it. Validation runs after parsing: a scalar option validates only its
+  final retained value, so an overwritten implicit or explicit value is
+  not checked. A `multi` option retains and validates every occurrence.
+  This differs from `default=`, which stays "trusted as-is, never validated"
   (that doesn't change; it's a separate, still-unvalidated fallback for the
   "never provided" case). No changes to `_bo_validate` are needed — this
   falls out for free from reusing `_bo_set_option_value`.
@@ -118,8 +121,11 @@ option mode --mode VALUE default=off implicit=on \
 - No schema-time check that `implicit`'s string satisfies the
   declared `type=`/`choices=` — same reasoning `default=` already
   documents (a schema-time check would need to run the same validators
-  used at parse time, for a value that isn't actually being used yet); it's
-  validated for real the moment a bare occurrence is actually parsed.
+  used after parsing, for a value that isn't actually being used yet).
+  An unused implicit literal is never checked. A bare occurrence's implicit
+  value is checked after parsing only if retained: the final scalar value
+  or any `multi` occurrence. See the
+  [retained scalar validation contract](21-retained-scalar-validation-contract.md).
 
 ## Completion
 
@@ -188,8 +194,10 @@ Fully additive. `option` without `implicit=` is completely unaffected
   positional, not as `--notes`'s value).
 - `test/unit/validation.bats`: an `implicit=` that fails
   `type=`/`choices=` is rejected with the usual `Invalid value:` error when
-  a bare occurrence actually triggers it (unlike `default=`, which is never
-  validated).
+  a bare occurrence's value is retained (unlike `default=`, which is never
+  validated). C20 in `test/unit/compatibility.bats` covers overwritten
+  scalar implicit and explicit values passing, while the corresponding
+  `multi` occurrences fail validation.
 - `test/unit/population.bats`: `multi` + `implicit=` — mixed bare and
   explicit occurrences accumulate in order (`--notes --notes=other` →
   `notes=(refs/notes/commits other)`); non-`multi` `implicit=` +

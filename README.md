@@ -110,6 +110,11 @@ option output -o --output PATH required type=directory help="Output directory"
 option jobs -j --jobs N default=4 type=integer help="Worker count"
 ```
 
+Without `multi`, repeated occurrences overwrite the scalar. Parsing finishes
+before validation, so only the final retained value is checked against its
+type/choices; an earlier invalid value that was overwritten does not cause
+an error.
+
 Add `multi` to make the option repeatable: each occurrence appends its value
 to an ordered **bash array** instead of overwriting a scalar.
 
@@ -166,8 +171,11 @@ option mode --mode VALUE default=off implicit=on help="Feature mode"
 
 A bare occurrence's value is recorded through the exact same path an
 explicit value would be, so `type=`/`choices=` validation applies to it
-exactly as it would to a value the user typed — unlike `default=`, which
-stays trusted-as-is and is never validated. `implicit=` combined with
+after parsing: only the final retained scalar value is checked, while every
+`multi` value is checked. The `implicit=` literal is not checked at schema
+time; an unused or overwritten scalar implicit value is never checked.
+Unlike implicit values retained from an occurrence, `default=` stays
+trusted-as-is and is never validated. `implicit=` combined with
 `multi` and `default=` together remains a schema error, same as `multi` +
 `default=` without `implicit=` — that rule is about "the default list"
 having no single sensible meaning for zero-vs-many occurrences, which
@@ -545,7 +553,7 @@ Diagonals follow repetition rules r1–r5 below.
 6. **C5:** a retained scalar implicit value is checked during validation, so a later scalar occurrence can overwrite it before validation.
    Every `multi` occurrence is checked; an unused invalid implicit value is not checked.
    Implicit literals retain their full bytes and validate like the corresponding explicit value.
-   The [retained scalar validation contract](features/21-retained-scalar-validation-contract.md#intended-outcome-and-acceptance) owns the corresponding ordinary documentation policy.
+   See the [retained scalar validation contract](features/21-retained-scalar-validation-contract.md#intended-outcome-and-acceptance).
 7. **C6:** a short implicit spelling always substitutes the implicit value.
    A short-only implicit option has no way to accept an explicit value; a following word belongs to positionals.
 8. **C7:** `METAVAR metavar=NAME` is accepted and NAME wins; `metavar=NAME METAVAR` is rejected as a second placeholder.
@@ -674,9 +682,12 @@ called with your script's original `"$@"`. It runs the full lifecycle:
 3. Parses `$@` against the schema. An unknown option, a missing option
    value, or an unexpected/missing positional argument prints an error to
    stderr and `exit 1`s.
-4. Validates required options/arguments are present and every provided
-   value matches its declared type. A failure prints to stderr and
-   `exit 1`s.
+4. Validates required options/arguments are present, then checks declared
+   types against the retained values: only the final ordinary scalar option
+   value or scalar record occurrence, every `multi` value or record
+   occurrence, and positional values under the rules above. Explicit and
+   implicit option values follow the same rule; overwritten scalar values
+   are not checked. A failure prints to stderr and `exit 1`s.
 5. Applies defaults to options that weren't provided.
 6. Populates shell variables — ordinary variables in your script's scope,
    never exported.

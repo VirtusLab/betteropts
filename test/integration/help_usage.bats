@@ -52,6 +52,8 @@ help_write_cli() {
       --question Q-backoff medium --help
     assert_failure 1
     assert_output ''
+    # BATS run --separate-stderr populates stderr.
+    # shellcheck disable=SC2154
     assert_equal "$stderr" $'Invalid invocation:\n\n\'--help\' must be used alone; it cannot be combined with other arguments.'
     assert_equal "$(cat "$corpus")" 'original frontmatter'
 

@@ -64,5 +64,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install ShellCheck 0.11.0
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
+            --output "$RUNNER_TEMP/shellcheck.tar.xz"
+          tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
+
       - name: Run shellcheck
-        run: ./shellcheck.sh
+        run: |
+          command -v shellcheck
+          test "$(command -v shellcheck)" = "$RUNNER_TEMP/shellcheck-v0.11.0/shellcheck"
+          shellcheck --version
+          ./shellcheck.sh

@@ -92,3 +92,9 @@ PASSTHROUGH_FIXTURE="$BATS_TEST_DIRNAME/../fixtures/passthrough"
   assert_success
   assert_line "config.toml"
 }
+
+@test "Bash adapter mode identifies ordinary attachments with no candidates" {
+  run "$TYPES_FIXTURE" --__complete --bash -- --mode=o
+  assert_success
+  assert_output plain
+}

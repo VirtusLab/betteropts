@@ -95,6 +95,13 @@ Unit/integration tests cover schema rejection and repeated metadata, every
 spelling, missing separators/tokens, empty and literal fields, scalar retention,
 multi validation/alignment, unchanged ordinary arity, requiredness, boundaries,
 help/usage, completion replay and adapter context negotiation.
+Adapter unit tests use the vendored bats-mock command stubs with exact protocol
+argument plans and explicit pair/plain responses; teardown verifies each plan
+with `unstub`. The empty-current-word request also checks argument count because
+this vendored matcher treats a missing trailing argument like an empty one.
+Stubs load during per-test setup, after BATS assigns its temporary directory.
+Engine and CLI tests, including the PTY check, retain real
+completion execution independently of those adapter boundary tests.
 The PTY script requires Python 3 as test tooling only. Runtime remains single-file
 Bash with no new dependency. Bash 4.2 runtime execution remains pending under
 [minimum-version compatibility](24-minimum-bash-compatibility.md); current-version

@@ -44,6 +44,9 @@ FIXTURE="$BATS_TEST_DIRNAME/../fixtures/equals_fields"
   assert_output --set=kind=topic
   run "$FIXTURE" --__complete --bash -- --set kind=to
   assert_output $'pair\nkind=topic'
+  run "$FIXTURE" --__complete --bash -- --set kind=nope
+  assert_success
+  assert_output pair
   run "$FIXTURE" --__complete --bash -- --ver
   assert_output $'plain\n--verbose'
   run "$FIXTURE" --__complete --bash -- --unknown x

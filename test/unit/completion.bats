@@ -8,6 +8,8 @@ set -euo pipefail
 BETTEROPTS="$BATS_TEST_DIRNAME/../../betteropts.sh"
 
 setup() {
+  # bats-mock builds its PATH from BATS_TEST_TMPDIR, assigned per test.
+  load '../../support/bats-mock/stub'
   # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   option mode -m --mode MODE type=choice choices=fast,slow,auto
@@ -19,6 +21,10 @@ setup() {
   option range -r --range VALUE type=git-range
   option notes -n --notes REF implicit=refs/notes/commits
   argument source required type=directory
+}
+
+teardown() {
+  unstub --allow-missing mock_command
 }
 
 @test "completes a choice option's value, filtered by prefix" {
@@ -193,9 +199,7 @@ setup() {
 }
 
 @test "_bo_bash_completion delegates to the target command's --__complete" {
-  mock_command() {
-    _bo_complete "${@:2}"
-  }
+  stub mock_command "--__complete --bash -- --mode s : printf '%s\n' plain slow"
   COMP_WORDS=(mock_command --mode s)
   COMP_CWORD=2
   _bo_bash_completion mock_command

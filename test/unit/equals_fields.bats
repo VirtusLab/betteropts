@@ -5,8 +5,14 @@ load '../../support/bats-assert/load'
 set -euo pipefail
 
 setup() {
+  # bats-mock builds its PATH from BATS_TEST_TMPDIR, assigned per test.
+  load '../../support/bats-mock/stub'
   # shellcheck source=../../betteropts.sh
   source "$BATS_TEST_DIRNAME/../../betteropts.sh"
+}
+
+teardown() {
+  unstub --allow-missing mock_command
 }
 
 pair() { option set -s --set fields=key,value syntax=equals "$@"; }
@@ -206,9 +212,10 @@ populate() {
 }
 
 @test "adapter reassembles only adjacent equals word breaks and strips the replacement prefix" {
-  pair key.type=choice key.choices=kind value.type=choice value.choices=one,two
-  # shellcheck disable=SC2329
-  mock_command() { _bo_complete "${@:2}"; }
+  stub mock_command \
+    "--__complete --bash -- --set kind=t : printf '%s\n' pair kind=two" \
+    "--__complete --bash -- --set=kind= : printf '%s\n' pair --set=kind=one --set=kind=two" \
+    '--__complete --bash -- --set kind =t : :'
   COMP_WORDS=(mock_command --set kind "=" t)
   COMP_CWORD=4
   COMP_LINE='mock_command --set kind=t'
@@ -230,10 +237,8 @@ populate() {
   assert_equal "${#COMPREPLY[@]}" 0
 }
 
-@test "ordinary current attachments remain unsupported after adapter normalization" {
-  option mode --mode MODE type=choice choices=one,two
-  # shellcheck disable=SC2329
-  mock_command() { _bo_complete "${@:2}"; }
+@test "adapter forwards normalized ordinary attachments and accepts no plain candidates" {
+  stub mock_command "--__complete --bash -- --mode=o : printf '%s\n' plain"
   COMP_WORDS=(mock_command --mode "=" o)
   COMP_CWORD=3
   COMP_LINE='mock_command --mode=o'
@@ -244,11 +249,10 @@ populate() {
 }
 
 @test "adapter escapes only pair candidates and handles plain header-like values literally" {
-  # shellcheck disable=SC2016
-  pair key.type=choice key.choices=kind value.type=choice 'value.choices=value with spaces,shell;$(false)*'
-  option mode --mode MODE type=choice 'choices=pair,plain,ordinary=,ordinary value'
-  # shellcheck disable=SC2329
-  mock_command() { _bo_complete "${@:2}"; }
+  stub mock_command \
+    "--__complete --bash -- --set kind=value : printf '%s\n' pair 'kind=value with spaces'" \
+    "--__complete --bash -- --mode '' : printf '%s\n' \"\$#\" > \"\$BATS_TEST_TMPDIR/adapter-argc\"; printf '%s\n' plain pair plain ordinary= 'ordinary value'" \
+    "--__complete --bash -- --set kind=nope : printf '%s\n' pair"
   COMP_WORDS=(mock_command --set kind "=" value)
   COMP_CWORD=4
   COMP_LINE='mock_command --set kind=value'
@@ -265,6 +269,8 @@ populate() {
   assert_equal "${COMPREPLY[1]}" plain
   assert_equal "${COMPREPLY[2]}" ordinary=
   assert_equal "${COMPREPLY[3]}" 'ordinary value'
+  # The vendored matcher equates missing and empty trailing arguments.
+  assert_equal "$(cat "$BATS_TEST_TMPDIR/adapter-argc")" 5
   COMP_WORDS=(mock_command --set kind "=" nope)
   COMP_CWORD=4
   COMP_LINE='mock_command --set kind=nope'
@@ -274,9 +280,7 @@ populate() {
 }
 
 @test "adapter reassembles adjacent runs of equals signs" {
-  pair value.type=choice value.choices==leading
-  # shellcheck disable=SC2329
-  mock_command() { _bo_complete "${@:2}"; }
+  stub mock_command "--__complete --bash -- --set kind==le : printf '%s\n' pair kind==leading"
   COMP_WORDS=(mock_command --set kind '==' le)
   COMP_CWORD=4
   COMP_LINE='mock_command --set kind==le'

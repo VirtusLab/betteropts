@@ -225,7 +225,8 @@ After all fields have been consumed, ordinary option and positional parsing resu
 Too few remaining tokens produces a `Missing value` error; a token that resembles an option still fills the next field slot.
 There is no short attachment or bundling.
 
-The existing built-in prescan still applies: `--help`/`-h`/`--usage` anywhere before the first literal `--` takes precedence, even inside a field slot.
+The built-in prescan still applies: `--help`/`-h`/`--usage` before the first literal `--` must be the sole argv token.
+Mixed invocations fail with an explanatory stderr error and exit 1 before business logic, even when the built-in token occupies a field slot.
 That first literal `--` ends the prescan even when field parsing later consumes it as a value.
 Completion replays complete occurrences and offers the next field's choices or paths.
 A literal `--` outside a record ends option-name completion and switches to positionals (or no candidates for a passthrough tail).
@@ -673,9 +674,9 @@ Empty string fields pass the string validator; constraining field types apply th
 | Passthrough × unknown/known/bare tokens | Unknown dash tokens, including unknown attached options and invalid attached flags, start capture; known ordinary/record options before the boundary parse; bare tokens do not start capture; [boundary policy](features/16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions) remains open. |
 | Passthrough × marker/earlier scalar slots | Marker retained in the shared positional stream and may fill an earlier scalar slot; tail is unvalidated and has no value completion. |
 | Schema error × built-ins | Finalization failure takes precedence over help, usage and completion, including missing/empty names, malformed outputs, reserved/unreachable aliases, passthrough attributes and malformed field schemas. |
-| Help/usage × values/errors/requiredness/passthrough | Raw prescan until first literal `--`; first `-h`/`--help`/`--usage` wins even in an ordinary value, field or passthrough token; [prescan policy](features/23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) remains unresolved. |
+| Help/usage × values/errors/requiredness/passthrough | Raw prescan until first literal `--`; a detected `-h`/`--help`/`--usage` succeeds only as the sole argv token, bypassing requirements. Any additional argument, including another built-in or marker, causes stderr error and exit 1 before business logic, even in a value, field or passthrough tail. General [prescan boundary policy](features/23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) remains unresolved. |
 | Consumed marker × built-in prescan | Raw `--` stops prescan even when the parser consumes it as an ordinary value/field; later known options can still parse; attached `--option=--` contains no raw marker. |
-| `--__complete` × other arguments | Dispatch only as first argv word after help/usage prescan; protocol `--` protects completion words from that prescan. |
+| `--__complete` × other arguments | Dispatch only as first argv word after help/usage prescan; protocol `--` protects completion words from that prescan. An unprotected help/usage token rejects the mixed invocation before completion dispatch. |
 | Summary/description × help/usage | Summary in both; description only in help; neither changes value handling. |
 | Declaration metadata × synopsis/help | Synopsis follows declaration order, long-name preference, requiredness, metavar/uppercase field names, multi and implicit syntax; help adds literal prose and annotations, preserving internal/trailing newlines through metavar and label composition; `var=` changes no labels. |
 | Defaults/implicit/choices × help | Ordinary declared defaults/implicit values printed verbatim; choice comma lists formatted; field choices qualified by uppercase field name in field order; passthrough rejects choices attributes. |
@@ -705,11 +706,15 @@ called with your script's original `"$@"`. It runs the full lifecycle:
 
 1. Finalizes the schema (catches a broken CLI declaration, e.g. two
    variadic arguments).
-2. Handles `-h`/`--help`, `--usage`, and `--__complete` — checked against
-   the raw arguments (so `--help` wins even next to other invalid options),
-   and only up to a literal `--` (so a positional argument that happens to
-   be the string `--help` after `--` is not treated as the flag). These
-   print their output and `exit 0`.
+2. Scans raw arguments for `-h`/`--help`/`--usage` up to the first literal
+   `--`, even when parsing would consume those tokens as values or a
+   passthrough tail. Each prints its output and `exit 0`s only when it is
+   the sole argv token. Any other argument causes an explanatory stderr
+   error and `exit 1`, without running business logic. A raw `--` protects
+   later tokens even when parsing consumes that marker as a mandatory
+   value; attached `--item=--help` is data. After this scan, `--__complete`
+   dispatches only as the first argv word, prints candidates and exits 0;
+   its protocol `--` protects completion words from the scan.
 3. Parses `$@` against the schema. An unknown option, a missing option
    value, or an unexpected/missing positional argument prints an error to
    stderr and `exit 1`s.
@@ -726,6 +731,11 @@ called with your script's original `"$@"`. It runs the full lifecycle:
 On success, `betteropts_parse` returns normally and your script continues.
 You never need to check its exit status yourself: if it returns at all, the
 CLI was valid.
+
+Mixed help/usage invocations previously printed help/usage and exited 0,
+which could make a skipped write look successful. They now fail, including
+repeated built-ins and `--help --usage` in either order. Invoke help/usage
+separately; see [built-in prescan policy](features/23-builtin-prescan-policy.md).
 
 ## Error messages
 

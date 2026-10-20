@@ -36,9 +36,11 @@ option set -s --set fields=key,value syntax=equals multi
    `k+=v` simply supplies first field `k+`, second field `v`.
 5. Tokens consumed as pair input are classified before ordinary option parsing,
    then option/positional recognition resumes after one token. Real markers and
-   passthrough boundaries retain their existing semantics. Raw help/usage prescan
-   is unchanged: `key=--help` is data, but a standalone `--help` before the first
-   literal `--` still invokes help even in a value slot.
+   passthrough boundaries retain their existing semantics. Raw help/usage
+   detection still leaves `key=--help` as data. A separate `--help` token before
+   the first literal `--` must be the sole argv token; `--set --help` now fails
+   with an explanatory stderr error and exit 1 before business logic, replacing
+   its previous successful help exit. See [built-in prescan policy](23-builtin-prescan-policy.md).
 6. Help and usage render uppercased field names joined with `=`, e.g.
    `[--set KEY=VALUE]...`; existing field-qualified annotations remain unchanged.
    No public declaration function or runtime dependency is added.

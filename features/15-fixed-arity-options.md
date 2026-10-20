@@ -84,11 +84,13 @@ After a full record, option/positional recognition resumes; too few remaining to
 A flag-shaped token in a value slot is a field value rather than evidence of a missing field.
 The parser's bare-token and earlier-slot passthrough behavior remains subject to [passthrough boundary policy](16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions).
 
-Public built-ins retain their existing raw precedence: [betteropts.sh](../betteropts.sh), `betteropts_parse`, scans for help/usage before its first literal `--`.
-A field containing `--help`, `-h` or `--usage` in that prefix invokes the built-in.
+Public built-ins retain raw detection: [betteropts.sh](../betteropts.sh), `betteropts_parse`, scans for help/usage before its first literal `--`.
+A detected `--help`, `-h` or `--usage` succeeds only as the sole argv token.
+A built-in in a field slot therefore causes an explanatory stderr error and exit 1 before business logic instead of the previous successful help/usage exit.
 A literal `--` ends that prescan even when record parsing consumes it as a field, after which later ordinary options may still parse.
 An attached first field `--question=--` is not a raw marker and does not stop the prescan.
-These are the current semantics; [built-in prescan policy](23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) remains unresolved.
+The [standalone restriction](23-builtin-prescan-policy.md#implemented-standalone-restriction) prevents skipped writes from looking successful.
+The broader [built-in boundary policy](23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) remains unresolved.
 
 ## Help, usage, and completion
 

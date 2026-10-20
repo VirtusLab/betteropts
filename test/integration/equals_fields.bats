@@ -55,8 +55,8 @@ FIXTURE="$BATS_TEST_DIRNAME/../fixtures/equals_fields"
   assert_failure
   assert_output --partial '--set VALUE --help'
   run "$FIXTURE" --set --help
-  assert_success
-  assert_line Options
+  assert_failure 1
+  assert_output --partial "'--help' must be used alone"
   run "$FIXTURE" --set kind=topic -- --help
   assert_success
   assert_line file=--help

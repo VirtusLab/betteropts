@@ -21,50 +21,76 @@ compat_cli() {
   ' compat "$BETTEROPTS" "$@"
 }
 
-@test "C24 builtins bypass missing requirements errors and passthrough boundaries before literal double dash" {
+@test "C24 standalone builtins bypass requirements but mixed builtins reject before literal double dash" {
   local builtin
   for builtin in -h --help --usage; do
+    run compat_cli "$builtin"
+    assert_success
+    assert_output --partial 'Usage:'
     run compat_cli --unknown "$builtin"
-    assert_success
-    assert_output --partial 'Usage:'
+    assert_failure 1
+    assert_output --partial "'$builtin' must be used alone"
     run compat_cli --item "$builtin"
-    assert_success
-    assert_output --partial 'Usage:'
+    assert_failure 1
+    assert_output --partial "'$builtin' must be used alone"
   done
   run compat_cli --item value -- --help
   assert_success
   assert_output $'item=value\nextra=-- --help'
+  run compat_cli --item -- --help
+  assert_success
+  assert_output $'item=--\nextra=--help'
+  run bash -c '
+    source "$1"
+    option item --item VALUE
+    betteropts_parse --item -- --help
+    printf "business logic\n"
+  ' compat "$BETTEROPTS"
+  assert_failure 1
+  assert_output $'Unknown option:\n\n--help\n\nUse --help for usage.'
+  run compat_cli --item=--help
+  assert_success
+  assert_output $'item=--help\nextra='
 }
 
 @test "C25 schema rejection takes precedence over every builtin" {
-  local builtin
+  local builtin form
   for builtin in --help --usage --__complete; do
-    run bash -c '
-      source "$1"
-      option item --item multi default=1
-      betteropts_parse "$2"
-    ' compat "$BETTEROPTS" "$builtin"
-    assert_failure
-    assert_output 'A multi option cannot declare a default.'
+    for form in standalone mixed; do
+      run bash -c '
+        source "$1"
+        option item --item multi default=1
+        if [[ "$3" == mixed ]]; then
+          betteropts_parse "$2" --unknown
+        else
+          betteropts_parse "$2"
+        fi
+      ' compat "$BETTEROPTS" "$builtin" "$form"
+      assert_failure 1
+      assert_output 'A multi option cannot declare a default.'
+    done
   done
 }
 
-@test "C26 first help or usage token wins and completion is special only in argv one" {
+@test "C26 help and usage combinations reject and completion is special only in argv one" {
   run compat_cli --usage --help
-  assert_success
-  refute_output --partial 'Detailed description'
+  assert_failure 1
+  assert_output --partial "'--usage' must be used alone"
   run compat_cli --help --usage
-  assert_success
-  assert_output --partial 'Detailed description'
+  assert_failure 1
+  assert_output --partial "'--help' must be used alone"
   run compat_cli --__complete -- --it
   assert_success
   assert_output --item
+  run compat_cli --__complete -- --help
+  assert_success
+  assert_output --help
   run compat_cli --item value --__complete
   assert_success
   assert_output $'item=value\nextra=--__complete'
   run compat_cli --__complete --help
-  assert_success
-  assert_output --partial 'Detailed description'
+  assert_failure 1
+  assert_output --partial "'--help' must be used alone"
 }
 
 @test "C27 reserved aliases fail before their builtin dispatches" {
@@ -130,24 +156,24 @@ compat_records_cli() {
   assert_line extra=--record
 }
 
-@test "C44 raw builtin precedence and consumed marker protection are unchanged around records" {
+@test "C44 mixed builtins reject around records while consumed markers still protect later data" {
   local builtin
   for builtin in --help -h --usage; do
     run compat_records_cli required --record key high "$builtin"
-    assert_success
-    assert_output --partial 'Usage:'
+    assert_failure 1
+    assert_output --partial "'$builtin' must be used alone"
     refute_output --partial count=
     run compat_records_cli required --record=-- high "$builtin" input
-    assert_success
-    assert_output --partial 'Usage:'
+    assert_failure 1
+    assert_output --partial "'$builtin' must be used alone"
     run compat_records_cli required --record -- high "$builtin" input
     assert_success
     assert_line "passage=$builtin"
     assert_line first=input
   done
   run compat_records_cli raw --unknown=value --help
-  assert_success
-  assert_output --partial 'Usage:'
+  assert_failure 1
+  assert_output --partial "'--help' must be used alone"
 }
 
 @test "C45 malformed record schema precedes every builtin before parsing any values" {

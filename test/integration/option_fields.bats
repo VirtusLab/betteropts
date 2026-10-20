@@ -48,10 +48,10 @@ FIXTURE="$BATS_TEST_DIRNAME/../fixtures/option_fields"
   assert_output --verbose
 }
 
-@test "raw builtin scanning keeps help precedence even in a field slot" {
+@test "raw builtin scanning rejects mixed help even in a field slot" {
   run "$FIXTURE" --question Q-order high --help
-  assert_success
-  assert_line 'Options'
+  assert_failure 1
+  assert_output --partial "'--help' must be used alone"
   refute_output --partial count=
 }
 

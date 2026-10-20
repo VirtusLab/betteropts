@@ -26,13 +26,16 @@ betteropts_parse() {
   for tok in "$@"; do
     [[ "$tok" == "--" ]] && break
     case "$tok" in
-      -h | --help)
-        _bo_help_text
-        printf '\n'
-        exit 0
-        ;;
-      --usage)
-        _bo_usage_text
+      -h | --help | --usage)
+        if (( $# != 1 )); then
+          _bo_print_error "Invalid invocation" "'$tok' must be used alone; it cannot be combined with other arguments."
+          exit 1
+        fi
+        if [[ "$tok" == "--usage" ]]; then
+          _bo_usage_text
+        else
+          _bo_help_text
+        fi
         printf '\n'
         exit 0
         ;;

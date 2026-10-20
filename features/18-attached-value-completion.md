@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Not yet implemented. This is an existing completion gap,
+Proposed for ordinary and separate-argument record options. Not yet implemented for those options. This is an existing completion gap,
 explicitly excluded from [13](13-implicit-value-options.md), not a regression
 introduced by implicit options or the compatibility matrix.
 
@@ -61,3 +61,21 @@ owns replay bugs; this current-word path can be developed independently
 but must honor its final boundary state. Proposed [12](12-fish-completion.md)
 owns Fish registration; coordinate any wire-protocol change with it rather
 than duplicating that adapter task. No new shell support is required here.
+
+## Equals-pair completion boundary
+
+[Equals field syntax](25-equals-field-syntax.md#completion-contract) implements
+current-word completion only for options explicitly selecting `syntax=equals`.
+A real Bash 5.3 pseudo-terminal trial shows that default `COMP_WORDBREAKS` splits
+unquoted `key=value` and `--set=key=value` at each `=`, while a current quoted
+`"key=partial` remains one raw word including its opening quote.
+The pair adapter rejoins adjacent equals fragments and safely escapes inserted
+candidates containing whitespace or shell metacharacters. It does not decode
+already quoted or escaped current words, or other breaks such as `:`.
+The PTY check observes unchanged prefixes for `"ki`, `kind="to`,
+`kind=value\ w` and `kind=scheme:va`; this does not imply every quoted
+form fails. Completing an ordinary current `--name=partial` still has no
+candidates. The broader quoting, cursor-position and ordinary attached-value
+contract remains owned by this feature; the pair increment does not settle it.
+The reproducible [PTY check](../test/interactive_equals.py) exercises actual
+Readline insertion independently from constructed `COMP_WORDS` tests.

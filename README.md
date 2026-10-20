@@ -229,7 +229,31 @@ The existing built-in prescan still applies: `--help`/`-h`/`--usage` anywhere be
 That first literal `--` ends the prescan even when field parsing later consumes it as a value.
 Completion replays complete occurrences and offers the next field's choices or paths.
 A literal `--` outside a record ends option-name completion and switches to positionals (or no candidates for a passthrough tail).
-Completing a current word of the form `--question=<partial>` remains unsupported, as for ordinary options; a completed attached first field is understood when completing later fields.
+Without `syntax=equals`, completing a current word of the form `--question=<partial>` remains unsupported, as for ordinary options; a completed attached first field is understood when completing later fields.
+
+For exactly two fields, add `syntax=equals` to consume one `KEY=VALUE` token
+instead of two separate arguments:
+
+```bash
+option set -s --set fields=key,value syntax=equals multi
+# --set kind=topic -s axis=true --set=kind=test
+# set_key=(kind axis kind)
+# set_value=(topic true test)
+```
+
+This declaration accepts only the equals format. Each occurrence requires a
+literal `=` and splits at its first occurrence; further equals signs remain in
+the second field. Empty fields use their existing type validation. Keys cannot
+contain `=`; there is no escaping grammar, `+=` operation, per-key type selection
+or mapping conversion. Field validation, scalar/array outputs, repeated keys,
+`var=` and requiredness are unchanged. Help and usage show `KEY=VALUE`.
+The only accepted `syntax=` value is `equals`, requiring exactly two declared
+fields; omitting the attribute preserves separate-argument syntax.
+Completion offers first-field candidates ending in `=`, then second-field
+candidates with the first field preserved, including attached long options.
+The Bash adapter supports unquoted current pair tokens and safely escapes
+inserted candidates; decoding already quoted or escaped current tokens remains
+outside this bounded completion contract (see [equals syntax](features/25-equals-field-syntax.md#completion-contract)).
 
 ### `argument <name> <required|optional|variadic|passthrough> [type=T] [choices=a,b,c] [default=D] [var=name] [help="..."]`
 
@@ -499,6 +523,7 @@ Per-field attributes use an actual declared field name in place of `<field>`.
 | `fields=a,b` | X | S | X | Nonempty list of distinct shell identifiers; fixed arity; one field is allowed. |
 | `<field>.type=T` | X | C | X | Requires the field in `fields=`; choice type also requires nonempty field choices; default field type is string. |
 | `<field>.choices=a,b` | X | C | X | Requires the field in `fields=` and its type to be choice; cannot be inert metadata. |
+| `syntax=equals` | X | C | X | Exactly two fields required; one token split at its first `=`; replaces separate-argument syntax. |
 
 Unknown keys, invalid keywords and unknown types are rejected at schema finalization.
 An argument must declare exactly one cardinality; ordinary options need not declare a metavar.
@@ -509,32 +534,33 @@ Record field names and prefixes follow the stricter [field identity contract](fe
 
 ### Complete pairwise declaration matrix
 
-The axes are `R` required, `O` optional, `V` variadic, `P` passthrough, `M` multi, `T` ordinary type, `C` ordinary choices, `D` default, `I` implicit, `K` metavar attribute, `B` bare metavar, `N` variable override, `H` help, `s` short spelling, `l` long spelling, `F` fields, `U` per-field type and `Q` per-field choices.
+The axes are `R` required, `O` optional, `V` variadic, `P` passthrough, `M` multi, `T` ordinary type, `C` ordinary choices, `D` default, `I` implicit, `K` metavar attribute, `B` bare metavar, `N` variable override, `H` help, `s` short spelling, `l` long spelling, `F` fields, `U` per-field type, `Q` per-field choices and `E` equals input syntax.
 Keys use their `key=value` form; `·` mirrors the corresponding upper cell.
 Every cell inherits applicability above; `X2` means no declaration kind accepts both.
 Per-field cells additionally inherit the complete field context in C8; a conditional cell does not say its two tokens alone are sufficient.
 Diagonals follow repetition rules r1–r5 below.
 
-| + | R | O | V | P | M | T | C | D | I | K | B | N | H | s | l | F | U | Q |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| R | r2 | X1 | X1 | X1 | S | S | C2 | C1 | S | S | S | S | S | C3 | C3 | S | C8 | C8 |
-| O | · | r3 | X1 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
-| V | · | · | r3 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
-| P | · | · | · | r3 | X2 | X4 | X4 | X4 | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
-| M | · | · | · | · | r4 | S | C2 | X3 | S | S | S | S | S | S | S | S | C8 | C8 |
-| T | · | · | · | · | · | r1 | C2 | C4 | C5 | S | S | S | S | C3 | C3 | X5 | X5 | X5 |
-| C | · | · | · | · | · | · | r1 | C2,4 | C2,5 | C2 | C2 | C2 | C2 | C2,3 | C2,3 | X5 | X5 | X5 |
-| D | · | · | · | · | · | · | · | r1 | S | S | S | S | S | C3 | C3 | X5 | X5 | X5 |
-| I | · | · | · | · | · | · | · | · | r1 | S | S | S | S | C6 | S | X5 | X5 | X5 |
-| K | · | · | · | · | · | · | · | · | · | r1 | C7 | S | S | S | S | X5 | X5 | X5 |
-| B | · | · | · | · | · | · | · | · | · | · | r5 | S | S | S | S | X5 | X5 | X5 |
-| N | · | · | · | · | · | · | · | · | · | · | · | r1 | S | C3 | C3 | C9 | C8,9 | C8,9 |
-| H | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C3 | C3 | S | C8 | C8 |
-| s | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C3 | S | C8 | C8 |
-| l | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | S | C8 | C8 |
-| F | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C8 | C8 |
-| U | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1,C8 | C8 |
-| Q | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1,C8 |
+| + | R | O | V | P | M | T | C | D | I | K | B | N | H | s | l | F | U | Q | E |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R | r2 | X1 | X1 | X1 | S | S | C2 | C1 | S | S | S | S | S | C3 | C3 | S | C8 | C8 | C10 |
+| O | · | r3 | X1 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 | X2 |
+| V | · | · | r3 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 | X2 |
+| P | · | · | · | r3 | X2 | X4 | X4 | X4 | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 | X2 |
+| M | · | · | · | · | r4 | S | C2 | X3 | S | S | S | S | S | S | S | S | C8 | C8 | C10 |
+| T | · | · | · | · | · | r1 | C2 | C4 | C5 | S | S | S | S | C3 | C3 | X5 | X5 | X5 | X5 |
+| C | · | · | · | · | · | · | r1 | C2,4 | C2,5 | C2 | C2 | C2 | C2 | C2,3 | C2,3 | X5 | X5 | X5 | X5 |
+| D | · | · | · | · | · | · | · | r1 | S | S | S | S | S | C3 | C3 | X5 | X5 | X5 | X5 |
+| I | · | · | · | · | · | · | · | · | r1 | S | S | S | S | C6 | S | X5 | X5 | X5 | X5 |
+| K | · | · | · | · | · | · | · | · | · | r1 | C7 | S | S | S | S | X5 | X5 | X5 | X5 |
+| B | · | · | · | · | · | · | · | · | · | · | r5 | S | S | S | S | X5 | X5 | X5 | X5 |
+| N | · | · | · | · | · | · | · | · | · | · | · | r1 | S | C3 | C3 | C9 | C8,9 | C8,9 | C9,10 |
+| H | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C3 | C3 | S | C8 | C8 | C10 |
+| s | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C3 | S | C8 | C8 | C10 |
+| l | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | S | C8 | C8 | C10 |
+| F | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1 | C8 | C8 | C10 |
+| U | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1,C8 | C8 | C8,10 |
+| Q | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1,C8 | C8,10 |
+| E | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | r1,C10 |
 
 1. **X1:** two cardinalities on one argument are rejected, including a repeated identical cardinality.
    **X2:** one token is invalid for each possible kind.
@@ -567,6 +593,10 @@ Diagonals follow repetition rules r1–r5 below.
     Generated `<prefix>_<field>` variables must not collide with any other declared output, including another record field under a different prefix.
     The unused base prefix is not itself an output; ordinary outputs require shell identifiers, while broader output-state policy remains under [schema identity validation](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions).
 
+11. **C10:** `syntax=equals` requires exactly two fields and rejects every other value, including empty text.
+    Final recognized attributes win, so repeated syntax/field declarations must satisfy this dependency in their final state.
+    The option consumes one token per occurrence while retaining two logical fields.
+
 ### Repeated declaration tokens
 
 | Rule | Repeated declaration token | Result |
@@ -577,7 +607,7 @@ Diagonals follow repetition rules r1–r5 below.
 | r4 | `multi` | Idempotent on option; invalid on other kinds. |
 | r5 | Bare metavar | A second bare placeholder is rejected. |
 
-Final record metadata must still satisfy C8/C9 after repeated `fields=` or per-field attributes.
+Final record metadata must still satisfy C8/C9/C10 after repeated `fields=` or per-field attributes.
 A final field list that removes a field with declared attributes is rejected, as is a final non-choice field type with retained field choices.
 An earlier unknown key/bareword remains a schema error; a later recognized attribute does not repair it.
 These rules concern tokens within one declaration; repeated argv occurrences follow the runtime rules below.
@@ -603,7 +633,7 @@ An earlier optional slot claims the first leftover token even with a trailing pa
 All supported types apply to ordinary scalar/multi options, required/optional/variadic arguments, and scalar/multi record fields.
 Passthrough accepts no explicit type or choices attributes and does not validate its tail.
 Ordinary option/optional argument/variadic defaults are trusted; records reject defaults and implicit values.
-Per-field type and choice attributes operate on separate argv fields, while an ordinary type/choices declaration constrains the ordinary value.
+Per-field type and choice attributes operate on logical fields (separate argv tokens unless `syntax=equals` is selected), while an ordinary type/choices declaration constrains the ordinary value.
 
 | Type | Value check | Ordinary `choices=` | Ordinary `default=` | Ordinary `implicit=` / `multi` | Passthrough | Record field | Value completion |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -629,7 +659,8 @@ Empty string fields pass the string validator; constraining field types apply th
 | Interaction | Current behavior / condition |
 | --- | --- |
 | Short/long names × ordinary option | `-x VALUE`, `--long VALUE`, `--long=VALUE`; mandatory values may be declared flags, negative numbers or literal `--`. |
-| Short/long names × record | `-x A B`, `--long A B`, `--long=A B` for two fields; attachment supplies the first field only; each field preserves one argv token verbatim. |
+| Short/long names × record | Without `syntax=equals`: `-x A B`, `--long A B`, `--long=A B` for two fields; attachment supplies the first field only; each field preserves one argv token verbatim. With `syntax=equals`: `-x A=B`, `--long A=B`, `--long=A=B`; one pair token supplies both fields. |
+| Equals syntax × validation/output | First literal `=` splits two logical fields; empty fields follow their validators, extra `=` stays in the second; missing separators fail parsing even if a later scalar occurrence would overwrite them; repeated keys remain ordered occurrences, with no `+=` interpretation. |
 | Bundles/short attachments × parser | `-vf`, `-xVALUE`, `-x=VALUE` are unknown with conventional declarations; there is no splitting into switches; literally declared unusual spellings have unresolved [identity policy](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions). |
 | Bare `-` / negative positional × parser | `-` is positional; other dash tokens require recognition, passthrough or a preceding real `--`. |
 | Repetition × validation/population | Flags stay true; ordinary options and scalar records keep and validate only their final occurrence; `multi` retains and validates every ordinary value or record occurrence, including duplicates. |
@@ -651,12 +682,12 @@ Empty string fields pass the string validator; constraining field types apply th
 | Completion × required/default/var | Completion does not validate requiredness, apply defaults or populate outputs; `var=` does not rename CLI candidates. |
 | Completion × types/positionals/multi | Type supplies candidates; positional words advance slots; selected repeatable choices remain available; fields select their own type/choices. |
 | Completion × implicit | Bare long/short ordinary implicit occurrences consume no following completion word. |
-| Completion × completed attachments | Known ordinary attachment fills its value; known record attachment fills its first field and remaining words fill later fields; unknown attached options and invalid attached flags respect passthrough boundaries. |
-| Completion × current attachments | A current `--name=partial` word has no value candidates for ordinary or record options; [attached completion](features/18-attached-value-completion.md#intended-outcome-and-open-decisions) remains proposed. |
+| Completion × completed attachments | Known ordinary attachment fills its value; a record attachment supplies its first field (the whole pair with `syntax=equals`) and remaining words fill any later token slots; unknown attached options and invalid attached flags respect passthrough boundaries. |
+| Completion × current attachments | Current equals-format attachments complete the appropriate field and preserve option/key prefixes; a current `--name=partial` word has no value candidates for ordinary or separate-argument record options; [attached completion](features/18-attached-value-completion.md#intended-outcome-and-open-decisions) remains proposed. |
 | Completion × literal `--` | Consumed value/field markers occupy value slots; real markers stop option-name suggestions and leave positional slot selection unchanged; passthrough boundaries stop candidates under the implemented [replay rules](features/17-completion-boundary-replay.md#implemented-replay-rules). |
 | Completion × bare `-` / passthrough | A completed bare `-` advances one positional slot and leaves known-option completion available before a real boundary, including with passthrough; a `-` consumed as a mandatory value/field advances no positional slot. See [bare-minus replay](features/17-completion-boundary-replay.md#bare-minus-replay). |
 | Completion × built-in names | Offers `-h`/`--help`, omits `--usage`/`--__complete`; replay skips parser errors instead of reporting them. |
-| Bash adapter × completion protocol | Reinvokes the command and reads line candidates into `COMPREPLY`; register with `-o nosort` to preserve candidate order; [attached-value completion](features/18-attached-value-completion.md#intended-outcome-and-open-decisions) remains unsupported. |
+| Bash adapter × completion protocol | Reinvokes the command and reads line candidates into `COMPREPLY`; register with `-o nosort` to preserve candidate order. Reassembles adjacent unquoted `=` word breaks; only equals-pair candidates receive prefix removal, shell escaping and first-field space suppression. Already quoted/escaped current pair tokens are not decoded; ordinary [attached-value completion](features/18-attached-value-completion.md#intended-outcome-and-open-decisions) remains unsupported. |
 | `var=` × scalar/array output | Flags are booleans; ordinary options/scalar arguments strings; `multi`/variadic/passthrough arrays; scalar records populate `<prefix>_<field>` strings and multi records aligned arrays; assignments are global with no export added. |
 
 ### Scope
@@ -751,7 +782,7 @@ complete -F _bo_bash_completion -o nosort mycommand
 ```
 
 `_bo_bash_completion` knows nothing about `mycommand`'s schema — it
-re-invokes `mycommand --__complete -- <words...>` and feeds the candidates
+re-invokes its private `--__complete` interface and feeds the candidates
 (one per line) it prints back into `COMPREPLY`. `-o nosort` keeps candidate
 order as emitted (e.g. a `choice` list's declared order) instead of
 alphabetizing it. `--__complete` is an internal interface: it's reserved,
@@ -775,4 +806,11 @@ Line coverage is measured with [kcov](https://github.com/SimonKagstrom/kcov):
 
 ```bash
 test/coverage.sh
+```
+
+An optional real interactive Bash/Readline check for equals-pair insertion uses
+Python 3 and a pseudo-terminal (test tooling only):
+
+```bash
+python3 test/interactive_equals.py
 ```

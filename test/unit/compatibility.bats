@@ -14,9 +14,9 @@ setup() {
   # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
   _bo_command_name=compat
-  COMPAT_DIMENSIONS=(required optional variadic passthrough multi type choices default implicit var help metavar bare short long fields field_type field_choices)
+  COMPAT_DIMENSIONS=(required optional variadic passthrough multi type choices default implicit var help metavar bare short long fields field_type field_choices syntax)
   COMPAT_FIELD_START=15
-  COMPAT_TOKENS=(required optional variadic passthrough multi type=integer 'choices=1,2' default=1 implicit=1 var=compat_value help=example metavar=N N -n --number 'fields=left,right' left.type=choice 'left.choices=1,2')
+  COMPAT_TOKENS=(required optional variadic passthrough multi type=integer 'choices=1,2' default=1 implicit=1 var=compat_value help=example metavar=N N -n --number 'fields=left,right' left.type=choice 'left.choices=1,2' syntax=equals)
 }
 
 # Independent applicability inventory and named pair exclusions from README.
@@ -24,12 +24,12 @@ setup() {
 # schema diagnostic priority is deliberately not part of the matrix contract.
 compat_expected() {
   local kind="$1" context="$2" dimension token allowed first="${3-}" second="${4-}"
-  local has_fields=false has_field_type=false has_field_choices=false
+  local has_fields=false has_field_type=false has_field_choices=false has_syntax=false
   shift 2
   COMPAT_ERRORS=()
   case "$kind" in
     flag) allowed=' var help short long ' ;;
-    option) allowed=' required multi type choices default implicit var help metavar bare short long fields field_type field_choices ' ;;
+    option) allowed=' required multi type choices default implicit var help metavar bare short long fields field_type field_choices syntax ' ;;
     argument) allowed=' required optional variadic passthrough type choices default var help short long ' ;;
     *) return 1 ;;
   esac
@@ -46,6 +46,7 @@ compat_expected() {
       fields) has_fields=true ;;
       field_type) has_field_type=true ;;
       field_choices) has_field_choices=true ;;
+      syntax) has_syntax=true ;;
       *) ;;
     esac
     [[ "$allowed" == *" $dimension "* ]] && continue
@@ -57,7 +58,7 @@ compat_expected() {
       *) ;;
     esac
     case "$dimension" in
-      type|choices|default|implicit|metavar|fields|field_type|field_choices)
+      type|choices|default|implicit|metavar|fields|field_type|field_choices|syntax)
         COMPAT_ERRORS+=("'$token' is not a recognized attribute for $kind 'item'.") ;;
       *) COMPAT_ERRORS+=("'$token' is not a valid $kind modifier for 'item'.") ;;
     esac
@@ -82,6 +83,9 @@ compat_expected() {
       fi
     elif [[ "$has_field_type" == true || "$has_field_choices" == true ]]; then
       COMPAT_ERRORS+=("Option 'item' requires fields= for field attributes.")
+    fi
+    if [[ "$has_syntax" == true && "$has_fields" == false ]]; then
+      COMPAT_ERRORS+=("Option 'item' requires exactly two fields for syntax=equals.")
     fi
   fi
   (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0

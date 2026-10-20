@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2154
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/betteropts.sh"
+summary "Equals-separated field sample"
+option set -s --set fields=key,value syntax=equals multi \
+  key.type=choice key.choices=kind,axis \
+  value.type=choice 'value.choices=topic,test,value with spaces,with=equals,shell;$(false)*,scheme:value,=leading'
+flag verbose -v --verbose
+argument file optional
+betteropts_parse "$@"
+printf 'count=%s\n' "${#set_key[@]}"
+for i in "${!set_key[@]}"; do
+  printf 'key=%s\nvalue=%s\n' "${set_key[$i]}" "${set_value[$i]}"
+done
+printf 'verbose=%s\nfile=%s\n' "$verbose" "$file"

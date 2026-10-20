@@ -27,7 +27,7 @@ question_value=(high)
 question_passage=('§4.2, Table 3')
 ```
 
-1. `fields=` fixes arity; `multi` independently controls repetition.
+1. `fields=` fixes logical arity; `multi` independently controls repetition.
    Each complete occurrence appends one element to each field array in order.
    Without `multi`, fields are scalars and the last occurrence wins, matching ordinary options.
    No redundant base/raw variable is populated.
@@ -62,7 +62,11 @@ question_passage=('§4.2, Table 3')
 
 ## Parsing boundaries
 
-Supported forms:
+The following separate-argument format is the default.
+[Equals field syntax](25-equals-field-syntax.md) optionally selects a single-token
+input format for exactly two fields, reusing the logical fields and outputs below.
+
+Supported default forms:
 
 ```text
 --question LABEL VALUE PASSAGE
@@ -97,7 +101,7 @@ These are the current semantics; [built-in prescan policy](23-builtin-prescan-po
 4. Correct replay requires classifying an attached token before counting its remaining field slots and distinguishing a consumed `--` from a real boundary.
    The same replay rules apply to ordinary options: real markers stop option-name suggestions without occupying positional slots, and unknown attached options or invalid attached flags start passthrough capture.
    [Completion boundary replay](17-completion-boundary-replay.md#implemented-replay-rules) records these rules and the remaining passthrough-policy dependency.
-5. A current `--option=<partial>` word remains unsupported for ordinary and record options under [attached-value completion](18-attached-value-completion.md#intended-outcome-and-open-decisions).
+5. Without `syntax=equals`, a current `--option=<partial>` word remains unsupported for ordinary and record options under [attached-value completion](18-attached-value-completion.md#intended-outcome-and-open-decisions).
    A completed attached first field correctly advances completion to later fields.
 
 ## Compatibility and scope
@@ -107,4 +111,5 @@ Completion candidates change where the uniform replay rules now honor real marke
 Fields share retained-scalar versus every-multi validation semantics with ordinary options; [retained scalar validation](21-retained-scalar-validation-contract.md#intended-outcome-and-acceptance) owns the separate ordinary documentation task.
 Empty supplied fields are type-checked, while the scalar positional empty-value policy remains with [empty positional presence](20-empty-positional-presence.md#intended-outcome-and-open-decisions).
 Label uniqueness, topic membership, passage reference policies and verdict aggregation remain consumer business logic.
-The implementation adds no consumer changes, default validation, current-word attachment completion or new public declaration functions.
+The original fields increment adds no consumer changes, default validation, current-word attachment completion or new public declaration functions.
+[Equals field syntax](25-equals-field-syntax.md) adds bounded current-word completion for its selected format.

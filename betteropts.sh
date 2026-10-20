@@ -127,7 +127,7 @@ _bo_key_allowed() {
       ;;
     option)
       case "$key" in
-        help | type | choices | default | var | metavar | implicit | fields) return 0 ;;
+        help | type | choices | default | var | metavar | implicit | fields | syntax) return 0 ;;
         *) [[ "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*\.(type|choices)$ ]] ;;
       esac
       ;;
@@ -274,6 +274,15 @@ _bo_option_arity() {
     printf '%s' "${#fields[@]}"
   else
     printf '1'
+  fi
+}
+
+# Logical fields and consumed argv tokens differ only for an equals pair.
+_bo_option_input_arity() {
+  if _bo_meta_is "$1" syntax equals; then
+    printf '1'
+  else
+    _bo_option_arity "$1"
   fi
 }
 
@@ -428,6 +437,16 @@ _bo_finalize_schema() {
     elif _bo_meta_has "$name" field_keys; then
       echo "Option '$name' requires fields= for field attributes." >&2
       return 1
+    fi
+    if _bo_meta_has "$name" syntax; then
+      if ! _bo_meta_is "$name" syntax equals; then
+        echo "Option '$name' requires syntax=equals (the only supported syntax)." >&2
+        return 1
+      fi
+      if ! _bo_meta_has "$name" fields || [[ "$(_bo_option_arity "$name")" != 2 ]]; then
+        echo "Option '$name' requires exactly two fields for syntax=equals." >&2
+        return 1
+      fi
     fi
     if _bo_meta_is "$name" multi "true" && _bo_meta_has "$name" default; then
       echo "A multi option cannot declare a default." >&2
@@ -601,6 +620,25 @@ _bo_set_option_fields() {
   _bo_multi_count[$name]=$((idx + 1))
 }
 
+# Decode the selected input syntax before using ordinary field storage.
+_bo_set_option_input() {
+  local name="$1" value="$2" label metavar
+  shift
+  if _bo_meta_is "$name" syntax equals; then
+    if [[ "$value" != *=* ]]; then
+      _bo_capture_text label _bo_display_flag "$name"
+      _bo_capture_text metavar _bo_option_metavars "$name"
+      _bo_die_invalid_value "$label" "$value" "expected $metavar"
+      return 1
+    fi
+    _bo_set_option_fields "$name" "${value%%=*}" "${value#*=}"
+  elif _bo_meta_has "$name" fields; then
+    _bo_set_option_fields "$name" "$@"
+  else
+    _bo_set_option_value "$name" "$value"
+  fi
+}
+
 # Records an occurrence of a (possibly multi) option's value: appended to an
 # ordered per-name list for `multi` options, overwritten otherwise.
 _bo_set_option_value() {
@@ -701,12 +739,12 @@ _bo_parse() {
         return 1
       fi
       if _bo_meta_has "$name" fields; then
-        local remaining=$(( $(_bo_option_arity "$name") - 1 ))
+        local remaining=$(( $(_bo_option_input_arity "$name") - 1 ))
         if (( i + remaining >= n )); then
           _bo_die_missing_value "$name"
           return 1
         fi
-        _bo_set_option_fields "$name" "$value" "${args[@]:i+1:remaining}"
+        _bo_set_option_input "$name" "$value" "${args[@]:i+1:remaining}" || return 1
         i=$((i + remaining + 1))
       else
         _bo_set_option_value "$name" "$value"
@@ -737,16 +775,12 @@ _bo_parse() {
         i=$((i + 1))
       else
         local arity
-        arity="$(_bo_option_arity "$name")"
+        arity="$(_bo_option_input_arity "$name")"
         if (( i + arity >= n )); then
           _bo_die_missing_value "$name"
           return 1
         fi
-        if _bo_meta_has "$name" fields; then
-          _bo_set_option_fields "$name" "${args[@]:i+1:arity}"
-        else
-          _bo_set_option_value "$name" "${args[$((i + 1))]}"
-        fi
+        _bo_set_option_input "$name" "${args[@]:i+1:arity}" || return 1
         i=$((i + arity + 1))
       fi
       continue
@@ -774,16 +808,12 @@ _bo_parse() {
         i=$((i + 1))
       else
         local arity
-        arity="$(_bo_option_arity "$name")"
+        arity="$(_bo_option_input_arity "$name")"
         if (( i + arity >= n )); then
           _bo_die_missing_value "$name"
           return 1
         fi
-        if _bo_meta_has "$name" fields; then
-          _bo_set_option_fields "$name" "${args[@]:i+1:arity}"
-        else
-          _bo_set_option_value "$name" "${args[$((i + 1))]}"
-        fi
+        _bo_set_option_input "$name" "${args[@]:i+1:arity}" || return 1
         i=$((i + arity + 1))
       fi
       continue
@@ -1105,10 +1135,11 @@ _bo_populate() {
 _bo_command_name="${_bo_command_name:-}"
 
 _bo_option_metavars() {
-  local name="$1" field joined=""
+  local name="$1" field joined="" separator=" "
+  _bo_meta_is "$name" syntax equals && separator="="
   if _bo_meta_has "$name" fields; then
     while IFS= read -r field; do
-      [[ -n "$joined" ]] && joined+=" "
+      [[ -n "$joined" ]] && joined+="$separator"
       joined+="${field^^}"
     done < <(_bo_field_names "$name")
     printf '%s' "$joined"
@@ -1332,6 +1363,26 @@ _bo_complete_value() {
   return 0
 }
 
+# Candidates are whole pair tokens; the Bash adapter removes the prefix
+# that Readline leaves before its last unquoted '=' word break.
+_bo_complete_pair() {
+  local name="$1" partial="$2" prefix="${3:-}" field_list candidate key
+  local fields=()
+  _bo_meta_get "$name" fields field_list
+  IFS=',' read -ra fields <<< "$field_list"
+  if [[ "$partial" == *=* ]]; then
+    key="${partial%%=*}="
+    while IFS= read -r candidate; do
+      printf '%s%s%s\n' "$prefix" "$key" "$candidate"
+    done < <(_bo_complete_value "$name" "${partial#*=}" "${fields[1]}")
+  else
+    while IFS= read -r candidate; do
+      [[ "$candidate" == *=* ]] && continue
+      printf '%s%s=\n' "$prefix" "$candidate"
+    done < <(_bo_complete_value "$name" "$partial" "${fields[0]}")
+  fi
+}
+
 _bo_complete_option_names() {
   local partial="$1" name long short
   for name in "${_bo_flags_and_options[@]}"; do
@@ -1351,6 +1402,11 @@ _bo_complete_option_names() {
 # in-progress partial word makes the real parser's error paths the wrong
 # tool here).
 _bo_complete() {
+  local bash_mode=false
+  if [[ "${1:-}" == "--bash" ]]; then
+    bash_mode=true
+    shift
+  fi
   if [[ "${1:-}" == "--" ]]; then
     shift
   fi
@@ -1405,7 +1461,7 @@ _bo_complete() {
     if [[ -n "$name" ]] && ! _bo_is_flag "$name"; then
       if [[ "$attached" == true ]] || ! _bo_meta_has "$name" implicit; then
         awaiting_name="$name"
-        remaining="$(_bo_option_arity "$name")"
+        remaining="$(_bo_option_input_arity "$name")"
         consumed=0
         if [[ "$attached" == true ]]; then
           remaining=$((remaining - 1))
@@ -1421,17 +1477,34 @@ _bo_complete() {
   [[ "$past_passthrough_boundary" == true ]] && return 0
 
   if (( remaining > 0 )); then
+    if _bo_meta_is "$awaiting_name" syntax equals; then
+      [[ "$bash_mode" == true ]] && printf 'pair\n'
+      _bo_complete_pair "$awaiting_name" "$partial"
+      return 0
+    fi
     if _bo_meta_has "$awaiting_name" fields; then
       local field_list
       _bo_meta_get "$awaiting_name" fields field_list
       IFS=',' read -ra fields <<< "$field_list"
       awaiting_field="${fields[$consumed]}"
     fi
+    [[ "$bash_mode" == true ]] && printf 'plain\n'
     _bo_complete_value "$awaiting_name" "$partial" "$awaiting_field"
     return 0
   fi
 
+  if [[ "$after_dashdash" == false && "$partial" == --*=* ]]; then
+    local attached_name
+    if _bo_capture_text attached_name _bo_find_by_long "${partial%%=*}" &&
+      _bo_meta_is "$attached_name" syntax equals; then
+      [[ "$bash_mode" == true ]] && printf 'pair\n'
+      _bo_complete_pair "$attached_name" "${partial#*=}" "${partial%%=*}="
+      return 0
+    fi
+  fi
+
   if [[ "$after_dashdash" == false && "$partial" == -* ]]; then
+    [[ "$bash_mode" == true ]] && printf 'plain\n'
     _bo_complete_option_names "$partial"
     return 0
   fi
@@ -1443,6 +1516,7 @@ _bo_complete() {
       return 0
     fi
     if [[ "$cardinality" == "variadic" || "$idx" -eq "$positional_count" ]]; then
+      [[ "$bash_mode" == true ]] && printf 'plain\n'
       _bo_complete_value "$arg_name" "$partial"
       return 0
     fi
@@ -1458,6 +1532,57 @@ _bo_complete() {
 # list's declared order) is preserved instead of being alphabetized.
 _bo_bash_completion() {
   local cmd="${COMP_WORDS[0]}"
-  local -a words=("${COMP_WORDS[@]:1:COMP_CWORD}")
-  mapfile -t COMPREPLY < <("$cmd" --__complete -- "${words[@]}" 2>/dev/null)
+  local -a words=("${COMP_WORDS[@]:1:COMP_CWORD}") normalized=()
+  local line="${COMP_LINE:-}" word previous="" separated prefix="" current="${2-${COMP_WORDS[COMP_CWORD]}}"
+  local index=0 valid=true
+  line="${line:0:${COMP_POINT:-0}}"
+
+  # COMP_WORDS keeps raw quoting but splits unquoted '=' even without spaces.
+  # Rejoin only adjacent fragments, using the raw line to keep `a = b` apart.
+  if [[ -n "$line" && "${COMP_WORDBREAKS:-}" == *=* ]]; then
+    for word in "${COMP_WORDS[@]:0:COMP_CWORD+1}"; do
+      separated=false
+      while [[ "$line" == [$' \t\n']* ]]; do
+        separated=true
+        line="${line:1}"
+      done
+      if [[ "$line" != "$word"* ]]; then
+        valid=false
+        break
+      fi
+      line="${line:${#word}}"
+      if (( index > 0 )) && [[ "$separated" == false && ( "$word" =~ ^=+$ || "$previous" =~ ^=+$ ) ]]; then
+        normalized[index - 1]+="$word"
+      else
+        normalized+=("$word")
+        index=$((index + 1))
+      fi
+      previous="$word"
+    done
+    if [[ "$valid" == true ]]; then
+      words=("${normalized[@]:1}")
+      word="${normalized[index-1]}"
+      if [[ "$word" == *=* && "$word" == *"$current" ]]; then
+        prefix="${word:0:${#word}-${#current}}"
+      fi
+    fi
+  fi
+
+  # The private adapter mode identifies pairs without guessing from candidate
+  # text; ordinary candidates retain their existing insertion behavior.
+  local -a reply=()
+  mapfile -t reply < <("$cmd" --__complete --bash -- "${words[@]}" 2>/dev/null)
+  COMPREPLY=("${reply[@]:1}")
+  if [[ "${reply[0]:-}" == pair ]]; then
+    for index in "${!COMPREPLY[@]}"; do
+      if [[ -n "$prefix" && "${COMPREPLY[$index]}" == "$prefix"* ]]; then
+        COMPREPLY[index]="${COMPREPLY[$index]:${#prefix}}"
+      fi
+      printf -v "COMPREPLY[$index]" '%q' "${COMPREPLY[$index]}"
+    done
+    # A completed first field must stay in the same token for the value.
+    if (( ${#COMPREPLY[@]} == 1 )) && [[ "${COMPREPLY[0]}" == *= ]]; then
+      compopt -o nospace 2>/dev/null || true
+    fi
+  fi
 }

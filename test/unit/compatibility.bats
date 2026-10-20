@@ -439,11 +439,16 @@ Use --help for usage."
 @test "C18 repeated keys and aliases overwrite while metavar spellings depend on order" {
   option item -n -x --number --other N metavar=M type=integer type=string help=first help=last
   _bo_finalize_schema
-  assert_equal "$(_bo_meta_get item short)" -x
-  assert_equal "$(_bo_meta_get item long)" --other
-  assert_equal "$(_bo_meta_get item metavar)" M
-  assert_equal "$(_bo_meta_get item type)" string
-  assert_equal "$(_bo_meta_get item help)" last
+  _bo_meta_get item short metadata_value
+  assert_equal "$metadata_value" -x
+  _bo_meta_get item long metadata_value
+  assert_equal "$metadata_value" --other
+  _bo_meta_get item metavar metadata_value
+  assert_equal "$metadata_value" M
+  _bo_meta_get item type metadata_value
+  assert_equal "$metadata_value" string
+  _bo_meta_get item help metadata_value
+  assert_equal "$metadata_value" last
   run _bo_parse --number 1
   assert_failure
   assert_output --partial 'Unknown option:'
@@ -845,7 +850,7 @@ compat_finish() {
 
 @test "C38 field shape type choice and prefix errors stay distinct from ordinary permissive metadata" {
   local bad
-  for bad in list prefix attribute kind type empty_choices missing_choices inert_choices; do
+  for bad in list prefix attribute kind type empty_choices missing_choices inert_choices newline_list newline_prefix newline_type; do
     (
       # shellcheck source=../../betteropts.sh
       source "$BETTEROPTS"
@@ -858,13 +863,18 @@ compat_finish() {
         empty_choices) option item --item fields=left left.type=choice left.choices= ;;
         missing_choices) option item --item fields=left left.type=choice ;;
         inert_choices) option item --item fields=left left.type=string left.choices=1,2 ;;
+        newline_list) option item --item $'fields=left,right\n' ;;
+        newline_prefix) option item --item fields=left $'var=result\n' ;;
+        newline_type) option item --item fields=left $'left.type=integer\n' ;;
         *) return 1 ;;
       esac
       run _bo_finalize_schema
       assert_failure
       case "$bad" in
         list) assert_output "Duplicate field 'left' for option 'item'." ;;
-        prefix) assert_output --partial 'Invalid field variable prefix' ;;
+        prefix|newline_prefix) assert_output --partial 'Invalid field variable prefix' ;;
+        newline_list) assert_output --partial 'Invalid fields= list' ;;
+        newline_type) assert_output --partial "is not a recognized type for field 'left'" ;;
         attribute) assert_output "'left.default' is not a recognized attribute for option 'item'." ;;
         kind) assert_output "'fields' is not a recognized attribute for argument 'item'." ;;
         type) assert_output "'int' is not a recognized type for field 'left' of option 'item'." ;;

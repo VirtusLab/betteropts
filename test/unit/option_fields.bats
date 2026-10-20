@@ -157,7 +157,7 @@ populate() {
 
 @test "invalid empty duplicate and malformed field identifiers fail schema validation" {
   local fields
-  for fields in '' ',a' 'a,' 'a,,b' 'a,a' 'a,b-c' 'a,2bad' 'a,has space' $'a,b\nc'; do
+  for fields in '' ',a' 'a,' 'a,,b' 'a,a' 'a,b-c' 'a,2bad' 'a,has space' $'a,b\nc' $'a,b\n' $'a,b\n\n'; do
     ( option pair --pair "fields=$fields"
       run _bo_finalize_schema
       assert_failure )
@@ -212,7 +212,7 @@ populate() {
 
 @test "field prefixes must be safe shell identifiers outside library namespace" {
   local prefix
-  for prefix in '' 'bad-name' 'x[0]' _bo _bo_raw; do
+  for prefix in '' 'bad-name' 'x[0]' _bo _bo_raw $'result\n' $'result\n\n'; do
     ( option pair --pair fields=key,value "var=$prefix"
       run _bo_finalize_schema
       assert_failure

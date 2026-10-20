@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed.
-Not yet implemented.
+Partially implemented.
+Metadata key isolation is implemented; schema corrections and unresolved policies remain below.
 Concrete schema/integrity corrections are separate from unresolved identity and output-state policies.
 No blanket naming, collision or spelling-shape policy is implied by current acceptance.
 
@@ -37,25 +37,20 @@ Their trailing-newline validation bypass belongs to [19, Lossless metadata retri
 
 ### Metadata key isolation
 
-Distinct logical IDs and metadata attributes must remain independent under [DESIGN.MD, CLI Schema](../DESIGN.MD#cli-schema) and [Metadata Encapsulation](../DESIGN.MD#metadata-encapsulation).
-The current `_bo_meta_set`, `_bo_meta_get` and `_bo_meta_has` encode both components with a dot, so an ordinary `item.value` type and record `item` field `value.type` share one physical key.
-For example:
+Implemented.
+Distinct logical IDs and metadata attributes remain independent under [DESIGN.MD, CLI Schema](../DESIGN.MD#cli-schema) and [Metadata Encapsulation](../DESIGN.MD#metadata-encapsulation).
+The metadata accessors escape percent signs and dots in each component before joining them with a dot, keeping their boundary unambiguous even when a logical ID contains dots or resembles the encoding itself.
+This encoding does not depend on locale-sensitive character counts, so changing locale cannot hide a non-ASCII ID's metadata.
+Consumers access metadata only through the shared API; the public declaration API and permitted logical-name alphabet are unchanged.
 
-```bash
-option item --item fields=value value.type=integer
-option item.value --other var=result type=string
-betteropts_parse --item not-an-integer --other text
-# The integer field is accepted after its type metadata is overwritten.
-```
+Previously, an ordinary `item.value` type and record `item` field `value.type` shared one physical key.
+Declaring either could silently change the other's validator, with the winner depending on registration order.
+They now retain independent type, choice and presentation metadata, without duplicate-name/output rules or a blanket logical-name character ban.
+`_bo_meta_has` distinguishes missing keys from present empty values independently for both declarations.
 
-Reversing those declaration calls instead makes `--other text` fail integer validation despite its declared string type.
-The logical IDs and outputs are distinct; duplicate-name or duplicate-output rules would not repair this case.
-Use unambiguous composite metadata keys behind the existing accessors, preserving the public API and consumers' independence from storage representation.
-Do not mask ambiguous encoding with a new blanket logical-name character ban.
-Test both registration orders, independent type/choice/help/completion metadata and `_bo_meta_has` existence semantics, including present empty values.
-
-This corrects the existing matrix's unique-name assumption and fields/per-field contexts without adding another identity inventory.
-[19](19-inert-declaration-policy.md#lossless-metadata-retrieval) owns loss of value bytes through command substitution, a distinct cause that may share API work but needs independent tests.
+[test/unit/metadata.bats](../test/unit/metadata.bats) covers both write/registration orders, dotted logical IDs, present-empty existence semantics, literal accessor values, integer/string validation separation, and independent choices in parsing, help and completion.
+The global matrix's identity assumptions and field context C8 include metadata independence rather than relying on simple IDs to avoid storage collisions.
+[19, Lossless metadata retrieval](19-inert-declaration-policy.md#lossless-metadata-retrieval) separately owns exact value preservation through accessor consumers and record-prefix validation.
 
 ### Effective builtin spelling reservations
 

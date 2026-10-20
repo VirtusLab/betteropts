@@ -8,6 +8,7 @@ set -euo pipefail
 BETTEROPTS="$BATS_TEST_DIRNAME/../../betteropts.sh"
 
 setup() {
+  metadata_value=''
   # shellcheck source=../../betteropts.sh
   source "$BETTEROPTS"
 }
@@ -29,20 +30,26 @@ Line two.
 
 @test "flag registers short, long, and help metadata" {
   flag verbose -v --verbose help="Enable verbose logging"
-  assert_equal "$(_bo_meta_get verbose short)" "-v"
-  assert_equal "$(_bo_meta_get verbose long)" "--verbose"
-  assert_equal "$(_bo_meta_get verbose help)" "Enable verbose logging"
-  assert_equal "$(_bo_meta_get verbose var)" "verbose"
+  _bo_meta_get verbose short metadata_value
+  assert_equal "$metadata_value" "-v"
+  _bo_meta_get verbose long metadata_value
+  assert_equal "$metadata_value" "--verbose"
+  _bo_meta_get verbose help metadata_value
+  assert_equal "$metadata_value" "Enable verbose logging"
+  _bo_meta_get verbose var metadata_value
+  assert_equal "$metadata_value" "verbose"
 }
 
 @test "flag defaults var to the declared name" {
   flag force -f --force
-  assert_equal "$(_bo_meta_get force var)" "force"
+  _bo_meta_get force var metadata_value
+  assert_equal "$metadata_value" "force"
 }
 
 @test "flag var overrides the populated variable name" {
   flag verbose -v --verbose var=is_verbose
-  assert_equal "$(_bo_meta_get verbose var)" "is_verbose"
+  _bo_meta_get verbose var metadata_value
+  assert_equal "$metadata_value" "is_verbose"
 }
 
 @test "flag records declaration order" {
@@ -54,92 +61,117 @@ Line two.
 
 @test "flag supports long-only declarations" {
   flag quiet --quiet
-  assert_equal "$(_bo_meta_get quiet short)" ""
-  assert_equal "$(_bo_meta_get quiet long)" "--quiet"
+  _bo_meta_get quiet short metadata_value
+  assert_equal "$metadata_value" ""
+  _bo_meta_get quiet long metadata_value
+  assert_equal "$metadata_value" "--quiet"
 }
 
 @test "option registers short, long, metavar, and help metadata" {
   option output -o --output PATH help="Output directory"
-  assert_equal "$(_bo_meta_get output short)" "-o"
-  assert_equal "$(_bo_meta_get output long)" "--output"
-  assert_equal "$(_bo_meta_get output metavar)" "PATH"
-  assert_equal "$(_bo_meta_get output help)" "Output directory"
+  _bo_meta_get output short metadata_value
+  assert_equal "$metadata_value" "-o"
+  _bo_meta_get output long metadata_value
+  assert_equal "$metadata_value" "--output"
+  _bo_meta_get output metavar metadata_value
+  assert_equal "$metadata_value" "PATH"
+  _bo_meta_get output help metadata_value
+  assert_equal "$metadata_value" "Output directory"
 }
 
 @test "option records required, type, default and choices" {
   option mode -m --mode MODE type=choice choices=fast,slow,auto default=fast
-  assert_equal "$(_bo_meta_get mode type)" "choice"
-  assert_equal "$(_bo_meta_get mode choices)" "fast,slow,auto"
-  assert_equal "$(_bo_meta_get mode default)" "fast"
+  _bo_meta_get mode type metadata_value
+  assert_equal "$metadata_value" "choice"
+  _bo_meta_get mode choices metadata_value
+  assert_equal "$metadata_value" "fast,slow,auto"
+  _bo_meta_get mode default metadata_value
+  assert_equal "$metadata_value" "fast"
 }
 
 @test "option required keyword sets required metadata" {
   option output -o --output PATH required
-  assert_equal "$(_bo_meta_get output required)" "true"
+  _bo_meta_get output required metadata_value
+  assert_equal "$metadata_value" "true"
 }
 
 @test "option is not required by default" {
   option jobs -j --jobs N default=4
-  assert_equal "$(_bo_meta_get jobs required)" "false"
+  _bo_meta_get jobs required metadata_value
+  assert_equal "$metadata_value" "false"
 }
 
 @test "option declaring optional does not set required metadata" {
   option jobs -j --jobs N optional
-  assert_equal "$(_bo_meta_get jobs required)" "false"
+  _bo_meta_get jobs required metadata_value
+  assert_equal "$metadata_value" "false"
 }
 
 @test "option declaring variadic does not set required metadata" {
   option jobs -j --jobs N variadic
-  assert_equal "$(_bo_meta_get jobs required)" "false"
+  _bo_meta_get jobs required metadata_value
+  assert_equal "$metadata_value" "false"
 }
 
 @test "option declaring passthrough does not set required metadata" {
   option jobs -j --jobs N passthrough
-  assert_equal "$(_bo_meta_get jobs required)" "false"
+  _bo_meta_get jobs required metadata_value
+  assert_equal "$metadata_value" "false"
 }
 
 @test "flag declaring optional does not set required metadata" {
   flag verbose -v --verbose optional
-  assert_equal "$(_bo_meta_get verbose required)" "false"
+  _bo_meta_get verbose required metadata_value
+  assert_equal "$metadata_value" "false"
 }
 
 @test "option var overrides the populated variable name" {
   option output -o --output PATH var=build_dir
-  assert_equal "$(_bo_meta_get output var)" "build_dir"
+  _bo_meta_get output var metadata_value
+  assert_equal "$metadata_value" "build_dir"
 }
 
 @test "option multi keyword sets multi metadata" {
   option topic -t --topic VALUE multi
-  assert_equal "$(_bo_meta_get topic multi)" "true"
+  _bo_meta_get topic multi metadata_value
+  assert_equal "$metadata_value" "true"
 }
 
 @test "option is not multi by default" {
   option topic -t --topic VALUE
-  assert_equal "$(_bo_meta_get topic multi)" ""
+  _bo_meta_get topic multi metadata_value
+  assert_equal "$metadata_value" ""
 }
 
 @test "option records an implicit value" {
   option notes --notes REF implicit=refs/notes/commits
-  assert_equal "$(_bo_meta_get notes implicit)" "refs/notes/commits"
+  _bo_meta_get notes implicit metadata_value
+  assert_equal "$metadata_value" "refs/notes/commits"
 }
 
 @test "option has no implicit value by default" {
   option notes --notes REF
-  assert_equal "$(_bo_meta_get notes implicit)" ""
+  _bo_meta_get notes implicit metadata_value
+  assert_equal "$metadata_value" ""
 }
 
 @test "argument records cardinality, type and help" {
   argument source required type=directory help="Source directory"
-  assert_equal "$(_bo_meta_get source cardinality)" "required"
-  assert_equal "$(_bo_meta_get source type)" "directory"
-  assert_equal "$(_bo_meta_get source help)" "Source directory"
+  _bo_meta_get source cardinality metadata_value
+  assert_equal "$metadata_value" "required"
+  _bo_meta_get source type metadata_value
+  assert_equal "$metadata_value" "directory"
+  _bo_meta_get source help metadata_value
+  assert_equal "$metadata_value" "Source directory"
 }
 
 @test "argument supports optional and variadic cardinality" {
   argument destination optional
   argument files variadic
-  assert_equal "$(_bo_meta_get destination cardinality)" "optional"
-  assert_equal "$(_bo_meta_get files cardinality)" "variadic"
+  _bo_meta_get destination cardinality metadata_value
+  assert_equal "$metadata_value" "optional"
+  _bo_meta_get files cardinality metadata_value
+  assert_equal "$metadata_value" "variadic"
 }
 
 @test "argument records declaration order" {
@@ -151,17 +183,20 @@ Line two.
 
 @test "argument var overrides the populated variable name" {
   argument source required var=input_dir
-  assert_equal "$(_bo_meta_get source var)" "input_dir"
+  _bo_meta_get source var metadata_value
+  assert_equal "$metadata_value" "input_dir"
 }
 
 @test "argument records default on optional cardinality" {
   argument commit optional default=HEAD
-  assert_equal "$(_bo_meta_get commit default)" "HEAD"
+  _bo_meta_get commit default metadata_value
+  assert_equal "$metadata_value" "HEAD"
 }
 
 @test "argument records default on variadic cardinality" {
   argument folders variadic default=.
-  assert_equal "$(_bo_meta_get folders default)" "."
+  _bo_meta_get folders default metadata_value
+  assert_equal "$metadata_value" "."
 }
 
 @test "schema finalization rejects more than one variadic argument" {
@@ -180,7 +215,8 @@ Line two.
 
 @test "argument supports passthrough cardinality" {
   argument extra passthrough
-  assert_equal "$(_bo_meta_get extra cardinality)" "passthrough"
+  _bo_meta_get extra cardinality metadata_value
+  assert_equal "$metadata_value" "passthrough"
 }
 
 @test "schema finalization rejects a passthrough argument that is not last" {

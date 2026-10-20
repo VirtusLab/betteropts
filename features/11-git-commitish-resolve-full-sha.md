@@ -89,9 +89,8 @@ mycommand --base main
 - `_bo_validate_type` currently only reports pass/fail (via its return
   code and the `_bo_die_*` calls) — it has no channel back to its callers
   for a rewritten value. It gains one: on a successful `git-commitish`
-  resolution, it prints the resolved SHA to stdout (mirroring how
-  `_bo_meta_get` already communicates values to callers via stdout); every
-  other type's case prints nothing and callers keep using the original
+  resolution, it prints the resolved SHA to stdout; every other type's
+  case prints nothing and callers keep using the original
   value, so non-git-commitish behavior is unchanged.
 - `_bo_validate`'s three call sites for provided values —
   `_bo_raw[$name]` for a scalar option, `_bo_multi_values["$name.$idx"]`

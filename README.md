@@ -452,7 +452,7 @@ A schema-accepted pair does not make arbitrary values or dependent combinations 
 The tables include current quirks whose unresolved policies belong to the linked feature records.
 Acceptance, including `I`, does not establish permission under the intended grammar.
 [Passthrough attribute rejection](features/19-inert-declaration-policy.md#passthrough-declaration-attributes) and the [proposed positional-spelling correction](features/19-inert-declaration-policy.md#positional-spelling-correction) distinguish unsupported declarations from the current behavior recorded below.
-[Lossless metadata retrieval](features/19-inert-declaration-policy.md#lossless-metadata-retrieval) covers literal-value preservation and exact structural validation that simple declaration pairs do not establish.
+[Lossless metadata retrieval](features/19-inert-declaration-policy.md#lossless-metadata-retrieval) preserves internal/trailing newlines in literal metadata and checks structural values in full; simple declaration pairs do not establish these value-content rules.
 
 ### Declaration applicability
 
@@ -483,6 +483,7 @@ Per-field attributes use an actual declared field name in place of `<field>`.
 Unknown keys, invalid keywords and unknown types are rejected at schema finalization.
 An argument must declare exactly one cardinality; ordinary options need not declare a metavar.
 The ordinary examples assume unique schema names, unique spellings, distinct valid Bash output variables and conventional `-x` / `--long` names.
+Distinct logical IDs retain independent metadata even when a name contains dots; logical IDs and metadata attributes have separate boundaries.
 [Concrete identity and metadata-isolation corrections](features/22-schema-identity-validation.md#concrete-schema-and-integrity-corrections) are separate from the remaining [identity policy choices](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions); duplicate spellings/output variables and reserved spellings are currently accepted with lookup, population and built-in precedence.
 Record field names and prefixes follow the stricter [field identity contract](features/15-fixed-arity-options.md#schema-rules), including rejection of generated output collisions.
 
@@ -528,8 +529,10 @@ Diagonals follow repetition rules r1–r5 below.
 4. **C3:** spellings operate on flags/options; on arguments they are accepted metadata with no parsing, help or completion effect.
 5. **C4:** ordinary defaults bypass all type/choice validation.
    Optional positional defaults also replace an explicitly empty scalar; variadic defaults are comma-split arrays.
+   Defaults retain internal and trailing newlines, including within each variadic member.
 6. **C5:** a retained scalar implicit value is checked during validation, so a later scalar occurrence can overwrite it before validation.
    Every `multi` occurrence is checked; an unused invalid implicit value is not checked.
+   Implicit literals retain their full bytes and validate like the corresponding explicit value.
    The [retained scalar validation contract](features/21-retained-scalar-validation-contract.md#intended-outcome-and-acceptance) owns the corresponding ordinary documentation policy.
 7. **C6:** a short implicit spelling always substitutes the implicit value.
    A short-only implicit option has no way to accept an explicit value; a following word belongs to positionals.
@@ -539,6 +542,7 @@ Diagonals follow repetition rules r1–r5 below.
    Thus `F` + choice-valued `U` also needs `Q`, `F` + `Q` also needs choice-valued `U`, and `U` + `Q` also needs `F`.
    The matrix's per-field context is a complete declared choice field; ordinary scalar-only attributes remain rejected in that context.
    These dependencies are global schema rules, not consequences of pairwise acceptance alone.
+   Per-field metadata remains independent from ordinary declarations whose logical IDs contain dots; field lists/types and prefixes are checked without removing trailing newlines.
 10. **C9:** a record's `var=` prefix must be a shell identifier outside `_bo`/`_bo_*`.
     Generated `<prefix>_<field>` variables must not collide with any other declared output, including another record field under a different prefix.
     The unused base prefix is not itself an output; ordinary output-name policy remains under [schema identity validation](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions).
@@ -547,7 +551,7 @@ Diagonals follow repetition rules r1–r5 below.
 
 | Rule | Repeated declaration token | Result |
 | --- | --- | --- |
-| r1 | Same recognized key, short spelling or long spelling | Last value wins; additional spellings do not become aliases; repeated types select one final type. |
+| r1 | Same recognized key, short spelling or long spelling | Last value wins; additional spellings do not become aliases; repeated types select one final type; values retain their full bytes before validation/use. |
 | r2 | `required` | Idempotent on option; rejected on argument as a second cardinality; invalid on flag. |
 | r3 | `optional`, `variadic`, `passthrough` | Rejected as a second cardinality on argument; invalid on other kinds. |
 | r4 | `multi` | Idempotent on option; invalid on other kinds. |
@@ -622,7 +626,7 @@ Empty string fields pass the string validator; constraining field types apply th
 | Consumed marker × built-in prescan | Raw `--` stops prescan even when the parser consumes it as an ordinary value/field; later known options can still parse; attached `--option=--` contains no raw marker. |
 | `--__complete` × other arguments | Dispatch only as first argv word after help/usage prescan; protocol `--` protects completion words from that prescan. |
 | Summary/description × help/usage | Summary in both; description only in help; neither changes value handling. |
-| Declaration metadata × synopsis/help | Synopsis follows declaration order, long-name preference, requiredness, metavar/uppercase field names, multi and implicit syntax; help adds literal prose and annotations; `var=` changes no labels. |
+| Declaration metadata × synopsis/help | Synopsis follows declaration order, long-name preference, requiredness, metavar/uppercase field names, multi and implicit syntax; help adds literal prose and annotations, preserving internal/trailing newlines through metavar and label composition; `var=` changes no labels. |
 | Defaults/implicit/choices × help | Ordinary declared defaults/implicit values printed verbatim; choice comma lists formatted; field choices qualified by uppercase field name in field order; passthrough choices still advertised without enforcement under [ordinary declaration policy](features/19-inert-declaration-policy.md#intended-outcome-and-open-decisions). |
 | Completion × required/default/var | Completion does not validate requiredness, apply defaults or populate outputs; `var=` does not rename CLI candidates. |
 | Completion × types/positionals/multi | Type supplies candidates; positional words advance slots; selected repeatable choices remain available; fields select their own type/choices. |

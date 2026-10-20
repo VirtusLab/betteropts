@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed.
-Not yet implemented.
+Partially implemented.
+Lossless metadata retrieval is implemented; declaration-attribute corrections and open policies remain below.
 Concrete contract corrections below are separate from the open ordinary-choice and default policies.
 Current schema acceptance does not establish that an ignored attribute is supported grammar.
 
@@ -60,43 +60,31 @@ Preserve final-spelling-wins on flag/option declarations and literal dash-lookin
 
 ### Lossless metadata retrieval
 
-Metadata must retain its declared bytes before structural validation and literal use.
+Implemented.
+Metadata retains its declared bytes before structural validation and literal use.
 [08](08-strict-schema-keywords.md#behavior) requires exact recognized type values, [15, Schema rules](15-fixed-arity-options.md#schema-rules) requires exact field-list/prefix identifiers, and [13](13-implicit-value-options.md#proposed-api) makes an implicit literal equivalent to that explicit value.
 Defaults remain trusted values; trusting them does not authorize changing their text.
 
-In [betteropts.sh](../betteropts.sh), `_bo_meta_get` writes the stored string, but callers retrieving it with command substitution lose trailing newlines.
-Consequently `type=$'integer\n'`, `value.type=$'integer\n'`, `fields=$'left,right\n'` and a record prefix `var=$'result\n'` pass validation as their newline-free counterparts.
-The same cause strips trailing newlines from `default=` and `implicit=` literals, whereas explicit argv values preserve them.
-With `type=integer implicit=$'1\n'`, a bare `--item` incorrectly succeeds as integer `1`, while the explicit attached `$'--item=1\n'` fails validation.
-For example, run each declaration in a fresh schema:
+The shared `_bo_meta_get name attribute destination` accessor in [betteropts.sh](../betteropts.sh) writes into a caller variable rather than returning text through command substitution, which removes trailing newlines.
+`_bo_meta_has` preserves the distinction between missing metadata and present empty content.
+All schema, parser, validator, default, population, help and completion consumers use these accessors, preserving the single metadata API required by [DESIGN.MD, Metadata Encapsulation](../DESIGN.MD#metadata-encapsulation).
+Generated text and logical-ID lookups use shared lossless capture so later label/metavar/annotation composition cannot strip the same bytes again.
+The runtime remains a dependency-free single file using Bash 4.2-compatible primitives.
 
-```bash
-option item --item default=$'value\n'
-betteropts_parse
-# item is value without its declared newline.
-```
+Structural values are validated in full: `type=$'integer\n'`, `value.type=$'integer\n'`, `fields=$'left,right\n'` and record `var=$'result\n'` are rejected rather than normalized.
+Recognized replacements still use their final values, so an earlier malformed value replaced by a valid final value is accepted.
+Defaults, implicit literals, help prose and metavars retain internal and trailing newlines.
+Variadic defaults split only on commas; a newline within a member remains part of that member.
+For `type=integer implicit=$'1\n'`, a retained bare occurrence fails just like the corresponding explicit attached value; unused implicit values remain unchecked, scalar replacement still applies, and every multi occurrence is checked.
+No trimming, newline ban for literals or default validation is introduced.
 
-```bash
-option item --item implicit=$'value\n'
-betteropts_parse --item
-# item again loses its newline; --item=$'value\n' preserves it.
-```
+Exact-byte regressions in [test/unit/metadata.bats](../test/unit/metadata.bats) cover empty values, zero/one/multiple trailing newlines, internal newlines, caller-local destinations, defaults/implicit equivalence, annotations/metavars/help, logical-ID lookup and public normal/help/usage/completion entrypoints under plain and strict callers.
+C38 in [test/unit/compatibility.bats](../test/unit/compatibility.bats) and malformed-field/prefix cases in [test/unit/option_fields.bats](../test/unit/option_fields.bats) include newline-bearing structural values.
+The existing matrix's C4/C5 and presentation rows record preservation through consumers.
 
-Replace the lossy accessor/caller interface with shared lossless metadata retrieval, preserving the single metadata API required by [DESIGN.MD, Metadata Encapsulation](../DESIGN.MD#metadata-encapsulation).
-Keep Bash 4.2 compatibility, dependency-free operation and the single-file runtime.
-Preserve the distinction between missing metadata and present empty content.
-Validate structural attributes against their original full values, and preserve supported literal defaults, implicit values and help metadata through their consumers.
-Do not patch each symptom with trimming, normalization or a ban on valid literal newlines.
-Inspect all accessor consumers so schema validation, parsing, defaults, help and completion use consistent values.
-
-Add exact-value regressions for zero/one/multiple trailing newlines and internal newlines, including structural rejection, default population, implicit/explicit equivalence and help annotations.
-Extend C38 and the malformed-field/prefix cases in [test/unit/option_fields.bats](../test/unit/option_fields.bats), alongside C4/C5 default/implicit contexts in the existing matrix.
-Check both attribute orders, final recognized replacements and public builtin entrypoints.
-Preserve last-recognized-value wins; an earlier invalid value replaced by a final valid value is different from a final malformed value.
-
-[22, Metadata key isolation](22-schema-identity-validation.md#metadata-key-isolation) owns ambiguous composite keys, a separate cause from lossy values.
-The API work can share an implementation, but key separation and exact value preservation require independent regressions.
+[22, Metadata key isolation](22-schema-identity-validation.md#metadata-key-isolation) owns ambiguous composite keys, a separate cause with independent regressions.
 Record-prefix normalization is owned here and cross-linked from 22 rather than fixed independently at each identity check.
+Comma-list member validation/completion, including internal newlines and empty members, remains an open policy below; preserving metadata does not define a new choice-list grammar.
 
 ## Intended outcome and open decisions
 

@@ -3,7 +3,8 @@
 ## Status
 
 Partially implemented.
-Metadata key isolation is implemented; schema corrections and unresolved policies remain below.
+Required names, ordinary output identifiers, builtin spelling reservations, unreachable long-spelling rejection and metadata key isolation are implemented.
+Remaining identity/output-state policies remain below.
 Concrete schema/integrity corrections are separate from unresolved identity and output-state policies.
 No blanket naming, collision or spelling-shape policy is implied by current acceptance.
 
@@ -12,9 +13,10 @@ No blanket naming, collision or spelling-shape policy is implied by current acce
 ### Required declaration names
 
 The README `flag`, `option` and `argument` signatures require a name.
-Their wrappers and `_bo_declare` in [betteropts.sh](../betteropts.sh) do not guard missing or explicitly empty names before accessing schema storage.
-Missing names can produce raw nounset errors; an explicitly empty logical ID can pass finalization and public help/completion with `var=result`, then fail parsing on an empty associative key.
-Without errexit, invalid-name paths can print Bash errors yet return to business logic successfully.
+The public wrappers in [betteropts.sh](../betteropts.sh) guard missing or explicitly empty names before accessing schema storage, retaining the first declaration diagnostic for finalization.
+Before this correction, these names could reach storage.
+Missing names could produce raw nounset errors; an explicitly empty logical ID could pass finalization and public help/completion with `var=result`, then fail parsing on an empty associative key.
+Without errexit, invalid-name paths could print Bash errors yet return to business logic successfully.
 
 Reject zero-argument calls and explicitly empty logical names with library-owned declaration diagnostics before builtins or parsing.
 Preserve variable-length valid modifier tails and distinguish a missing name from a present empty attribute value.
@@ -23,14 +25,14 @@ Do not require every nonempty logical ID to match output-variable syntax: hyphen
 ### Ordinary output identifiers
 
 [00, Variable Population](00-initial.MD#variable-population), [10](10-flag-var-override.md#proposed-api) and README `Overriding the populated variable name` promise shell variables.
-Effective ordinary outputs such as `var=`, `var=bad-name` and `var=9bad` currently pass `_bo_finalize_schema`, including on flags and arguments.
-Public help/completion can succeed, while normal population prints Bash identifier errors.
-Without errexit, `option item --item var=bad-name; betteropts_parse --item value` can still return to business logic.
+Effective ordinary outputs such as `var=`, `var=bad-name` and `var=9bad` previously passed `_bo_finalize_schema`, including on flags and arguments.
+Public help/completion could succeed, while normal population printed Bash identifier errors.
+Without errexit, `option item --item var=bad-name; betteropts_parse --item value` could still return to business logic.
 
 Reject effective ordinary output targets that are not valid Bash variable identifiers, whether derived from the logical name or an explicit override.
 Validate before builtins and do not rely on caller shell flags to terminate a broken declaration.
 Keep logical IDs and output identifiers separate.
-`var=result[0]` creates array-shaped state for an ordinary scalar and fails multi population as `result[0][0]`; recommend rejecting such undocumented target expressions rather than silently defining an expression-target API.
+`var=result[0]` previously created array-shaped state for an ordinary scalar and failed multi population as `result[0][0]`; such target expressions are rejected because ordinary targets are shell identifiers.
 Broader preexisting-variable and private-output policies remain open below.
 Record prefixes already have the stricter explicit identifier/private-namespace rules in [15, Schema rules](15-fixed-arity-options.md#schema-rules).
 Their trailing-newline validation bypass belongs to [19, Lossless metadata retrieval](19-inert-declaration-policy.md#lossless-metadata-retrieval), rather than a second prefix-normalization fix here.
@@ -55,8 +57,8 @@ The global matrix's identity assumptions and field context C8 include metadata i
 ### Effective builtin spelling reservations
 
 [DESIGN.MD, Built-in Commands](../DESIGN.MD#built-in-commands) reserves `-h`, `--help`, `--usage` and `--__complete`; the hidden completion interface must not appear in help.
-Custom flag/option aliases using these spellings currently pass finalization.
-A custom `--__complete` also appears in detailed help and synopsis, contrary to the hidden-interface invariant and [14](14-expanded-usage-synopsis.md#behavior).
+Before this correction, custom flag/option aliases using these spellings passed finalization.
+A custom `--__complete` also appeared in detailed help and synopsis, contrary to the hidden-interface invariant and [14](14-expanded-usage-synopsis.md#behavior).
 
 Reject effective custom aliases colliding with those reserved spellings before any builtin runs.
 Validate final effective short/long aliases, preserving the existing last-spelling-wins rule: `flag item --help --item` leaves `--item` as its alias.
@@ -66,14 +68,15 @@ Reserve CLI spellings, not logical names or literal argv data; a logical name `-
 Builtin precedence does not make every conflicting alias universally unreachable.
 A custom `--__complete` can parse later in argv, and `--help` can parse after raw prescan stops at a marker consumed as another option's value.
 The defect is the reservation/help invariant, not a claim of uniform dispatch across all argv contexts.
-C27 in [test/integration/compatibility.bats](../test/integration/compatibility.bats) characterizes current permissiveness and precedence; update it with reservation diagnostics and effective-alias controls when implementing this correction.
+C27 in [test/integration/compatibility.bats](../test/integration/compatibility.bats) now requires reservation diagnostics.
+[Public identity regressions](../test/integration/schema_identity.bats) cover all entrypoints and caller modes, effective replacements, literal data and safe logical/output separation.
 [23](23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) separately owns raw-prescan and consumption policy.
 
 ### Unreachable long spellings
 
 A literal declared long spelling containing `=` is unreachable under [00, Parsing Rules](00-initial.MD#parsing-rules) and `_bo_parse` / `_bo_find_by_long` in [betteropts.sh](../betteropts.sh).
 For both `flag item --bad=name` and `option item --bad=name`, invoking that spelling instead looks up `--bad` and fails.
-Reject effective long spellings containing `=` as unsupported names, without choosing a broader alias character alphabet.
+Effective long spellings containing `=` are rejected as unsupported names, without choosing a broader alias character alphabet.
 Preserve ordinary long attachment syntax, where `=` separates a valid declared name from a supplied value.
 Marker spelling `--` is a separate policy case below, not universally unreachable across declaration kinds.
 

@@ -85,6 +85,15 @@ compat_expected() {
     fi
   fi
   (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0
+  if [[ "$kind" == argument && ( "$first" == passthrough || "$second" == passthrough ) ]]; then
+    for dimension in "$@"; do
+      case "$dimension" in
+        type|choices) COMPAT_ERRORS+=("Passthrough argument 'item' cannot declare $dimension=.") ;;
+        *) ;;
+      esac
+    done
+  fi
+  (( ${#COMPAT_ERRORS[@]} > 0 )) && return 0
   case "$kind:$first:$second" in
     option:multi:default|option:default:multi) COMPAT_ERRORS+=('A multi option cannot declare a default.') ;;
     argument:required:default|argument:default:required) COMPAT_ERRORS+=('A required argument cannot declare a default.') ;;
@@ -274,6 +283,12 @@ compat_pairs() {
           default_variadic) argument item variadic "default=$bad_default,second fallback" "type=$type" choices=1,2 var=compat_value ;;
           *) argument item "$mode" "type=$type" choices=1,2 var=compat_value ;;
         esac
+        if [[ "$mode" == passthrough ]]; then
+          run _bo_finalize_schema
+          assert_failure
+          assert_output "Passthrough argument 'item' cannot declare type=."
+          exit 0
+        fi
         _bo_finalize_schema
         case "$mode" in
           scalar) _bo_parse --item "$value" ;;
@@ -296,10 +311,6 @@ compat_pairs() {
           assert_equal "${#compat_value[@]}" 2
           assert_equal "${compat_value[0]}" "$value"
           assert_equal "${compat_value[1]}" "$value"
-        elif [[ "$mode" == passthrough ]]; then
-          assert_equal "${#compat_value[@]}" 2
-          assert_equal "${compat_value[0]}" --
-          assert_equal "${compat_value[1]}" "$value"
         elif [[ "$mode" == variadic ]]; then
           assert_regex "$(declare -p compat_value)" '^declare -a '
           assert_equal "${#compat_value[@]}" 1
@@ -312,15 +323,26 @@ compat_pairs() {
   done
 }
 
-@test "C10 passthrough typing is accepted and advertised but never enforced" {
-  argument item passthrough type=choice choices=1,2 var=compat_value help=opaque
+@test "C10 passthrough rejects type and choices attributes but accepts a raw untyped tail" {
+  local attribute
+  for attribute in type=string type= choices= choices=one,two; do
+    (
+      # shellcheck source=../../betteropts.sh
+      source "$BETTEROPTS"
+      argument item passthrough "$attribute" var=compat_value
+      run _bo_finalize_schema
+      assert_failure
+      assert_output "Passthrough argument 'item' cannot declare ${attribute%%=*}=."
+    )
+  done
+  argument item passthrough var=compat_value help=opaque
   _bo_finalize_schema
   _bo_parse --not-a-choice
   _bo_assign_positionals
   _bo_validate
   _bo_populate
   assert_equal "${compat_value[0]}" --not-a-choice
-  assert_equal "$(_bo_annotations item)" 'choices: 1, 2'
+  assert_equal "$(_bo_annotations item)" ''
   run _bo_complete -- ''
   assert_output ''
 }
@@ -472,6 +494,12 @@ Use --help for usage."
           implicit) option item --item implicit=compat-invalid "type=$type" choices=1,2 ;;
           *) argument item "$mode" "type=$type" choices=1,2 ;;
         esac
+        if [[ "$mode" == passthrough ]]; then
+          run _bo_finalize_schema
+          assert_failure
+          assert_output "Passthrough argument 'item' cannot declare type=."
+          exit 0
+        fi
         _bo_finalize_schema
         case "$mode" in
           scalar|multi) _bo_parse --item compat-invalid ;;
@@ -480,13 +508,9 @@ Use --help for usage."
         esac
         _bo_assign_positionals
         run _bo_validate
-        if [[ "$mode" == passthrough ]]; then
-          assert_success
-        else
-          assert_failure
-          assert_output --partial 'Invalid value:'
-          assert_output --partial compat-invalid
-        fi
+        assert_failure
+        assert_output --partial 'Invalid value:'
+        assert_output --partial compat-invalid
       )
     done
   done
@@ -783,7 +807,8 @@ compat_finish() {
       # shellcheck source=../../betteropts.sh
       source "$BETTEROPTS"
       option record --record fields=key,value multi value.type=integer
-      local -a modifiers=(type=integer)
+      local -a modifiers=()
+      [[ "$mode" != passthrough ]] && modifiers+=(type=integer)
       [[ "$mode" == optional || "$mode" == variadic ]] && modifiers+=(default=trusted-invalid-default)
       argument item "$mode" "${modifiers[@]}"
       _bo_finalize_schema

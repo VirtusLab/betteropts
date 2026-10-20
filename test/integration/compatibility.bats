@@ -67,16 +67,20 @@ compat_cli() {
   assert_output --partial 'Detailed description'
 }
 
-@test "C27 reserved aliases are accepted declarations but their builtin takes precedence" {
-  run bash -c '
-    source "$1"
-    flag custom --help
-    betteropts_parse --help
-    printf "custom=%s\n" "$custom"
-  ' compat "$BETTEROPTS"
-  assert_success
-  assert_output --partial 'Show this help'
-  refute_output --partial custom=true
+@test "C27 reserved aliases fail before their builtin dispatches" {
+  local spelling kind
+  for kind in flag option; do
+    for spelling in -h --help --usage --__complete; do
+      run bash -c '
+        source "$1"
+        "$2" custom "$3"
+        betteropts_parse "$3"
+        printf "business logic\n"
+      ' compat "$BETTEROPTS" "$kind" "$spelling"
+      assert_failure
+      assert_output "Reserved spelling '$spelling' for $kind 'custom'."
+    done
+  done
 }
 
 compat_records_cli() {

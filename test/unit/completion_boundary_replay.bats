@@ -19,9 +19,11 @@ replay_schema() {
   flag verbose -v --verbose
   argument first required type=choice choices=first
   argument second optional type=choice choices=second
-  if [[ "$tail" != none ]]; then
-    argument rest "$tail" type=choice choices=tail
-  fi
+  case "$tail" in
+    variadic) argument rest variadic type=choice choices=tail ;;
+    passthrough) argument rest passthrough ;;
+    *) ;;
+  esac
 }
 
 replay_record() {

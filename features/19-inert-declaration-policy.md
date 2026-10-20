@@ -3,7 +3,7 @@
 ## Status
 
 Partially implemented.
-Lossless metadata retrieval is implemented; declaration-attribute corrections and open policies remain below.
+Passthrough attribute rejection and lossless metadata retrieval are implemented; other corrections and open policies remain below.
 Concrete contract corrections below are separate from the open ordinary-choice and default policies.
 Current schema acceptance does not establish that an ignored attribute is supported grammar.
 
@@ -12,16 +12,16 @@ Current schema acceptance does not establish that an ignored attribute is suppor
 ### Passthrough declaration attributes
 
 [03, Non-Goals](03-passthrough-arguments.md#non-goals-v1) defines passthrough as raw, untyped text, with no `type=`/`choices=` processing.
-Explicit `type=` and `choices=` declarations on passthrough must be rejected as unsupported attributes, rather than advertising constraints that are never enforced.
+Explicit `type=` and `choices=` declarations on passthrough are rejected as unsupported attributes, rather than advertising constraints that are never enforced.
 Adding validation of the forwarded tail would change its raw contract.
 
-Currently, `_bo_declare` accepts these ordinary argument attributes and `_bo_finalize_schema` only checks that a declared type name is recognized.
-For example:
+Before this correction, `_bo_declare` accepted these ordinary argument attributes and `_bo_finalize_schema` only checked that a declared type name was recognized.
+The same declaration now fails before parsing:
 
 ```bash
 argument extra passthrough type=choice choices=one,two
 betteropts_parse --not-a-choice
-# extra=(--not-a-choice), while help advertises choices: one, two.
+# Passthrough argument 'extra' cannot declare type=.
 ```
 
 Reject either attribute by presence, including explicit `type=string`, `type=`, `choices=`, repeated attributes and either token order.
@@ -30,9 +30,13 @@ Reject the static declaration before normal parsing, help, usage or hidden compl
 The diagnostic must identify the declaration and unsupported attribute.
 Help-only suppression would conceal the schema defect.
 
+Implemented regressions cover public normal/help/usage/completion entrypoints under plain, errexit, nounset and combined caller modes in [schema_identity.bats](../test/integration/schema_identity.bats).
+The compatibility expectations retain valid untyped passthrough controls.
+
 This corrects the existing applicability T/C argument entries, pair cells P×T/P×C, C2 and the type table's passthrough column in the [global matrix](../README.md#compatibility-matrices).
-Its omitted/string row must distinguish omission from an explicit type attribute when the fix lands.
-Update C01–C04's cardinality-sensitive expectations and the permissive C09/C10/C19 cases in [test/unit/compatibility.bats](../test/unit/compatibility.bats), retaining valid untyped passthrough controls.
+Its omitted/string row distinguishes omission from an explicit type attribute.
+C01–C04's cardinality-sensitive expectations and the formerly permissive C09/C10/C19 cases and C36 record/passthrough control were updated in [test/unit/compatibility.bats](../test/unit/compatibility.bats), retaining valid untyped passthrough controls.
+The record/passthrough and completion-replay fixtures omit type/choices metadata on their raw passthrough tails; their boundary expectations are preserved.
 No [passthrough boundary](16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions) policy decision is needed for this schema rejection.
 
 ### Positional spelling correction

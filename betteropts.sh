@@ -64,6 +64,7 @@ betteropts_parse() {
 
 _bo_summary=""
 _bo_description=""
+_bo_declaration_error=""
 _bo_flags=()
 _bo_options=()
 _bo_flags_and_options=()
@@ -217,7 +218,20 @@ _bo_declare() {
   done
 }
 
+# Invalid names cannot enter associative storage; retain the first diagnostic
+# for schema finalization so declarations keep their existing deferred-error API.
+_bo_require_declaration_name() {
+  if [[ $# -eq 1 ]]; then
+    [[ -n "$_bo_declaration_error" ]] || _bo_declaration_error="Missing name for $1 declaration."
+    return 1
+  elif [[ -z "$2" ]]; then
+    [[ -n "$_bo_declaration_error" ]] || _bo_declaration_error="Empty name for $1 declaration."
+    return 1
+  fi
+}
+
 flag() {
+  _bo_require_declaration_name flag "$@" || return 0
   local name="$1"
   shift
   _bo_declare flag "$name" "$@"
@@ -227,6 +241,7 @@ flag() {
 }
 
 option() {
+  _bo_require_declaration_name option "$@" || return 0
   local name="$1"
   shift
   _bo_declare option "$name" "$@"
@@ -236,6 +251,7 @@ option() {
 }
 
 argument() {
+  _bo_require_declaration_name argument "$@" || return 0
   local name="$1"
   shift
   _bo_declare argument "$name" "$@"
@@ -339,10 +355,52 @@ _bo_finalize_fields() {
   done
 }
 
+_bo_validate_declaration_identity() {
+  local _bo_schema_name="$1" _bo_schema_kind="$2" _bo_schema_value _bo_schema_key
+  if ! _bo_meta_has "$_bo_schema_name" fields; then
+    _bo_meta_get "$_bo_schema_name" var _bo_schema_value
+    if [[ ! "$_bo_schema_value" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf "Invalid output variable '%s' for %s '%s' (expected a shell identifier).\n" "$_bo_schema_value" "$_bo_schema_kind" "$_bo_schema_name" >&2
+      return 1
+    fi
+  fi
+  if [[ "$_bo_schema_kind" == argument ]]; then
+    _bo_meta_get "$_bo_schema_name" cardinality _bo_schema_value
+    if [[ "$_bo_schema_value" == passthrough ]]; then
+      for _bo_schema_key in type choices; do
+        if _bo_meta_has "$_bo_schema_name" "$_bo_schema_key"; then
+          printf "Passthrough argument '%s' cannot declare %s=.\n" "$_bo_schema_name" "$_bo_schema_key" >&2
+          return 1
+        fi
+      done
+    fi
+  else
+    for _bo_schema_key in short long; do
+      _bo_meta_get "$_bo_schema_name" "$_bo_schema_key" _bo_schema_value
+      case "$_bo_schema_value" in
+        -h|--help|--usage|--__complete)
+          printf "Reserved spelling '%s' for %s '%s'.\n" "$_bo_schema_value" "$_bo_schema_kind" "$_bo_schema_name" >&2
+          return 1
+          ;;
+        *) ;;
+      esac
+      if [[ "$_bo_schema_key" == long && "$_bo_schema_value" == *=* ]]; then
+        printf "Invalid long spelling '%s' for %s '%s' (must not contain '=').\n" "$_bo_schema_value" "$_bo_schema_kind" "$_bo_schema_name" >&2
+        return 1
+      fi
+    done
+  fi
+}
+
 # Validates the schema itself (not user input). Called once at the start of
 # betteropts_parse. Returns non-zero and prints to stderr on a broken schema.
 _bo_finalize_schema() {
   local name kind cardinality count metadata collects_rest_count=0 optional_seen=false i last_index=$(( ${#_bo_arguments[@]} - 1 ))
+
+  if [[ -n "$_bo_declaration_error" ]]; then
+    printf '%s\n' "$_bo_declaration_error" >&2
+    return 1
+  fi
 
   for name in "${_bo_flags_and_options[@]}" "${_bo_arguments[@]}"; do
     _bo_meta_get "$name" kind kind
@@ -356,6 +414,7 @@ _bo_finalize_schema() {
       echo "'$metadata' is not a valid $kind modifier for '$name'." >&2
       return 1
     fi
+    _bo_validate_declaration_identity "$name" "$kind" || return 1
     _bo_meta_get "$name" type metadata
     if _bo_meta_has "$name" type && ! _bo_known_type "$metadata"; then
       echo "'$metadata' is not a recognized type for $kind '$name'." >&2

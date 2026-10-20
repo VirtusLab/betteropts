@@ -248,9 +248,9 @@ A positional argument. Exactly one of `required`, `optional`, `variadic`, or
   dropped. This matters because passthrough tokens are typically forwarded
   raw to another command, where the `--` can itself carry meaning (e.g.
   disambiguating a pathspec from a revision for `git`); dropping it would
-  be indistinguishable from the caller never having typed it. No
-  `type=`/`choices=` validation applies to passthrough tokens, and no
-  `default=` is supported.
+  be indistinguishable from the caller never having typed it. Explicit
+  `type=`, `choices=` and `default=` attributes are rejected;
+  the forwarded tail stays raw and untyped.
 
 Only one `variadic` **or** `passthrough` argument is allowed per CLI
 (whichever kind it is), and it must be the last one declared (checked at
@@ -317,8 +317,9 @@ populates `$is_verbose`, `$build_dir`, and `$input_dir` instead of
 | `git-commitish` | resolves to a commit via `git rev-parse` | none            |
 | `git-range` | resolves via `git rev-list --count`  | none                  |
 
-Omitting `type=` is the same as `type=string`. A default value (`default=`)
-is trusted as-is and is never itself type-checked.
+On typed declarations, omitting `type=` is the same as `type=string`;
+passthrough arguments require omission and reject every explicit `type=`.
+A default value (`default=`) is trusted as-is and is never itself type-checked.
 
 `type=git-commitish` accepts anything git itself would accept as a
 commit-ish — a SHA (full or abbreviated), branch, tag, or an expression like
@@ -369,6 +370,17 @@ an `argument`, or a second bareword after an `option`'s metavar:
 An `argument` must declare **exactly one** of `required`, `optional`,
 `variadic`, or `passthrough` — declaring none, or more than one, is also a
 schema error rather than silently behaving as `optional`.
+
+Every declaration requires a nonempty logical name. Ordinary output targets,
+whether derived from that name or set with `var=`, must match
+`[a-zA-Z_][a-zA-Z0-9_]*`; array expressions such as `var=result[0]` are rejected.
+A logical name may differ from the output identifier when a valid `var=` is supplied.
+
+Effective flag/option spellings cannot use the reserved builtins `-h`, `--help`,
+`--usage` or `--__complete`; long spellings cannot contain `=`.
+Repeated recognized attributes and spellings use their final values.
+Passthrough rejects explicit `type=` and `choices=` attributes by presence,
+including empty values and `type=string`.
 
 A `type=` value that isn't one of the recognized types (a typo like
 `type=int` instead of `type=integer`) is rejected the same way, rather than
@@ -451,7 +463,7 @@ Read the applicability table before the pairwise table and runtime rules.
 A schema-accepted pair does not make arbitrary values or dependent combinations valid.
 The tables include current quirks whose unresolved policies belong to the linked feature records.
 Acceptance, including `I`, does not establish permission under the intended grammar.
-[Passthrough attribute rejection](features/19-inert-declaration-policy.md#passthrough-declaration-attributes) and the [proposed positional-spelling correction](features/19-inert-declaration-policy.md#positional-spelling-correction) distinguish unsupported declarations from the current behavior recorded below.
+[Passthrough attribute rejection](features/19-inert-declaration-policy.md#passthrough-declaration-attributes) is enforced; the [proposed positional-spelling correction](features/19-inert-declaration-policy.md#positional-spelling-correction) remains unresolved.
 [Lossless metadata retrieval](features/19-inert-declaration-policy.md#lossless-metadata-retrieval) preserves internal/trailing newlines in literal metadata and checks structural values in full; simple declaration pairs do not establish these value-content rules.
 
 ### Declaration applicability
@@ -470,11 +482,11 @@ Per-field attributes use an actual declared field name in place of `<field>`.
 | `variadic` | X | X | C | At most one collect-rest positional, declared last. |
 | `passthrough` | X | X | C | Same placement rule; raw tail with [boundary conditions](features/16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions). |
 | `multi` | X | S | X | Ordered arrays of option occurrences; independent of record arity; no `default=`. |
-| `type=T` | X | S | C/I | Ordinary option/argument type; recognized names only; ignored on passthrough; scalar positional empty exception; cannot combine with `fields=`. |
-| `choices=a,b` | X | C/I | C/I | Active only with ordinary `type=choice`; passthrough never validates; cannot combine with `fields=`. |
+| `type=T` | X | S | C | Ordinary option/argument type; recognized names only; rejected on passthrough even when empty/string; scalar positional empty exception; cannot combine with `fields=`. |
+| `choices=a,b` | X | C/I | C/I | Active only with ordinary `type=choice`; rejected on passthrough even when empty; cannot combine with `fields=`. |
 | `default=D` | X | C | C | Rejected with `multi`, record fields, required positional or passthrough; unreachable on required ordinary option. |
 | `implicit=V` | X | S | X | Bare ordinary occurrence substitutes V; explicit attachment requires long `=`; cannot combine with `fields=`. |
-| `var=name` | S | C | S | Changes ordinary output name or record output prefix; field output rules apply to records. |
+| `var=name` | C | C | C | Ordinary outputs require shell identifiers; record prefixes also follow field output rules. |
 | `help=text` | S | S | S | Literal detailed-help prose; does not change parsing. |
 | `fields=a,b` | X | S | X | Nonempty list of distinct shell identifiers; fixed arity; one field is allowed. |
 | `<field>.type=T` | X | C | X | Requires the field in `fields=`; choice type also requires nonempty field choices; default field type is string. |
@@ -484,7 +496,7 @@ Unknown keys, invalid keywords and unknown types are rejected at schema finaliza
 An argument must declare exactly one cardinality; ordinary options need not declare a metavar.
 The ordinary examples assume unique schema names, unique spellings, distinct valid Bash output variables and conventional `-x` / `--long` names.
 Distinct logical IDs retain independent metadata even when a name contains dots; logical IDs and metadata attributes have separate boundaries.
-[Concrete identity and metadata-isolation corrections](features/22-schema-identity-validation.md#concrete-schema-and-integrity-corrections) are separate from the remaining [identity policy choices](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions); duplicate spellings/output variables and reserved spellings are currently accepted with lookup, population and built-in precedence.
+[Concrete identity and metadata-isolation corrections](features/22-schema-identity-validation.md#concrete-schema-and-integrity-corrections) are separate from the remaining [identity policy choices](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions); duplicate spellings/output variables remain accepted with lookup and population precedence. Effective custom `-h`, `--help`, `--usage` and `--__complete` spellings are rejected, as are long spellings containing `=`. Every declaration requires a nonempty logical name; ordinary outputs must be Bash identifiers, independently of the logical name.
 Record field names and prefixes follow the stricter [field identity contract](features/15-fixed-arity-options.md#schema-rules), including rejection of generated output collisions.
 
 ### Complete pairwise declaration matrix
@@ -500,7 +512,7 @@ Diagonals follow repetition rules r1–r5 below.
 | R | r2 | X1 | X1 | X1 | S | S | C2 | C1 | S | S | S | S | S | C3 | C3 | S | C8 | C8 |
 | O | · | r3 | X1 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
 | V | · | · | r3 | X1 | X2 | S | C2 | S | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
-| P | · | · | · | r3 | X2 | I | I | X4 | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
+| P | · | · | · | r3 | X2 | X4 | X4 | X4 | X2 | X2 | X2 | S | S | I | I | X2 | X2 | X2 |
 | M | · | · | · | · | r4 | S | C2 | X3 | S | S | S | S | S | S | S | S | C8 | C8 |
 | T | · | · | · | · | · | r1 | C2 | C4 | C5 | S | S | S | S | C3 | C3 | X5 | X5 | X5 |
 | C | · | · | · | · | · | · | r1 | C2,4 | C2,5 | C2 | C2 | C2 | C2 | C2,3 | C2,3 | X5 | X5 | X5 |
@@ -519,11 +531,11 @@ Diagonals follow repetition rules r1–r5 below.
 1. **X1:** two cardinalities on one argument are rejected, including a repeated identical cardinality.
    **X2:** one token is invalid for each possible kind.
    **X3:** `multi` + `default=` is always rejected, including with `required` or `implicit=`.
-   **X4:** passthrough has no defaults.
+   **X4:** passthrough rejects explicit type, choices and default attributes by presence.
    **X5:** record fields cannot combine with ordinary metavar, type, choices, default or implicit attributes.
 2. **C1:** `required default=D` is accepted on an ordinary option, but omission fails requiredness before defaults, so the fallback is unreachable.
    On an argument it is rejected; [declaration policy](features/19-inert-declaration-policy.md#intended-outcome-and-open-decisions) owns the unresolved ordinary-option policy.
-3. **C2:** ordinary `choices=` is inert without `type=choice`; passthrough ignores validation even with it.
+3. **C2:** ordinary `choices=` is inert without `type=choice`; passthrough rejects both attributes.
    Missing/empty ordinary choices are schema-accepted, but no option value matches them.
    Completion and annotations use ordinary choices only for `type=choice`; [declaration policy](features/19-inert-declaration-policy.md#intended-outcome-and-open-decisions) owns these ordinary metadata cases.
 4. **C3:** spellings operate on flags/options; on arguments they are accepted metadata with no parsing, help or completion effect.
@@ -545,7 +557,7 @@ Diagonals follow repetition rules r1–r5 below.
    Per-field metadata remains independent from ordinary declarations whose logical IDs contain dots; field lists/types and prefixes are checked without removing trailing newlines.
 10. **C9:** a record's `var=` prefix must be a shell identifier outside `_bo`/`_bo_*`.
     Generated `<prefix>_<field>` variables must not collide with any other declared output, including another record field under a different prefix.
-    The unused base prefix is not itself an output; ordinary output-name policy remains under [schema identity validation](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions).
+    The unused base prefix is not itself an output; ordinary outputs require shell identifiers, while broader output-state policy remains under [schema identity validation](features/22-schema-identity-validation.md#intended-outcome-and-open-decisions).
 
 ### Repeated declaration tokens
 
@@ -580,21 +592,21 @@ An earlier optional slot claims the first leftover token even with a trailing pa
 
 ### Types across other dimensions
 
-All supported types apply to ordinary scalar/multi options, every argument cardinality, and scalar/multi record fields.
-Passthrough accepts recognized type metadata but does not validate its tail.
+All supported types apply to ordinary scalar/multi options, required/optional/variadic arguments, and scalar/multi record fields.
+Passthrough accepts no explicit type or choices attributes and does not validate its tail.
 Ordinary option/optional argument/variadic defaults are trusted; records reject defaults and implicit values.
 Per-field type and choice attributes operate on separate argv fields, while an ordinary type/choices declaration constrains the ordinary value.
 
 | Type | Value check | Ordinary `choices=` | Ordinary `default=` | Ordinary `implicit=` / `multi` | Passthrough | Record field | Value completion |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| omitted / `string` | None | I | Trusted | No type constraint | I | No validation; field choices X | None |
-| `integer` | `^-?[0-9]+$` | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | None |
-| `float` | `^-?[0-9]+(\.[0-9]+)?$` | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | None |
-| `file` | Existing regular file | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | Filesystem paths, including directories |
-| `directory` | Existing directory | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | Directories |
-| `choice` | Member of comma-separated choices | Active | Trusted | Final scalar / every multi value | I; choices still advertised | Nonempty field choices required; final scalar / every multi field | Listed choices in declared order |
-| `git-commitish` | `git rev-parse --verify --quiet "${value}^{commit}"` succeeds | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | None |
-| `git-range` | `git rev-list --count "$value"` succeeds | I | Trusted | Final scalar / every multi value | I | Final scalar / every multi field; field choices X | None |
+| omitted / `string` | None | I | Trusted | No type constraint | Omitted S; explicit `string` X | No validation; field choices X | None |
+| `integer` | `^-?[0-9]+$` | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | None |
+| `float` | `^-?[0-9]+(\.[0-9]+)?$` | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | None |
+| `file` | Existing regular file | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | Filesystem paths, including directories |
+| `directory` | Existing directory | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | Directories |
+| `choice` | Member of comma-separated choices | Active | Trusted | Final scalar / every multi value | X | Nonempty field choices required; final scalar / every multi field | Listed choices in declared order |
+| `git-commitish` | `git rev-parse --verify --quiet "${value}^{commit}"` succeeds | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | None |
+| `git-range` | `git rev-list --count "$value"` succeeds | I | Trusted | Final scalar / every multi value | X | Final scalar / every multi field; field choices X | None |
 
 Git types require Git and a working tree when a value is actually checked, including provided fields; omitted optional records do not trigger that check.
 They preserve input text rather than resolving populated values to SHAs; ranges resolving to no commits are allowed.
@@ -621,13 +633,13 @@ Empty string fields pass the string validator; constraining field types apply th
 | `--` × ordinary arguments/variadic | A real marker ends recognition and is dropped from the positional stream; following tokens are positional. |
 | Passthrough × unknown/known/bare tokens | Unknown dash tokens, including unknown attached options and invalid attached flags, start capture; known ordinary/record options before the boundary parse; bare tokens do not start capture; [boundary policy](features/16-passthrough-boundary-contract.md#intended-outcome-and-open-decisions) remains open. |
 | Passthrough × marker/earlier scalar slots | Marker retained in the shared positional stream and may fill an earlier scalar slot; tail is unvalidated and has no value completion. |
-| Schema error × built-ins | Finalization failure takes precedence over help, usage and completion, including malformed field schemas. |
+| Schema error × built-ins | Finalization failure takes precedence over help, usage and completion, including missing/empty names, malformed outputs, reserved/unreachable aliases, passthrough attributes and malformed field schemas. |
 | Help/usage × values/errors/requiredness/passthrough | Raw prescan until first literal `--`; first `-h`/`--help`/`--usage` wins even in an ordinary value, field or passthrough token; [prescan policy](features/23-builtin-prescan-policy.md#intended-outcome-and-open-decisions) remains unresolved. |
 | Consumed marker × built-in prescan | Raw `--` stops prescan even when the parser consumes it as an ordinary value/field; later known options can still parse; attached `--option=--` contains no raw marker. |
 | `--__complete` × other arguments | Dispatch only as first argv word after help/usage prescan; protocol `--` protects completion words from that prescan. |
 | Summary/description × help/usage | Summary in both; description only in help; neither changes value handling. |
 | Declaration metadata × synopsis/help | Synopsis follows declaration order, long-name preference, requiredness, metavar/uppercase field names, multi and implicit syntax; help adds literal prose and annotations, preserving internal/trailing newlines through metavar and label composition; `var=` changes no labels. |
-| Defaults/implicit/choices × help | Ordinary declared defaults/implicit values printed verbatim; choice comma lists formatted; field choices qualified by uppercase field name in field order; passthrough choices still advertised without enforcement under [ordinary declaration policy](features/19-inert-declaration-policy.md#intended-outcome-and-open-decisions). |
+| Defaults/implicit/choices × help | Ordinary declared defaults/implicit values printed verbatim; choice comma lists formatted; field choices qualified by uppercase field name in field order; passthrough rejects choices attributes. |
 | Completion × required/default/var | Completion does not validate requiredness, apply defaults or populate outputs; `var=` does not rename CLI candidates. |
 | Completion × types/positionals/multi | Type supplies candidates; positional words advance slots; selected repeatable choices remain available; fields select their own type/choices. |
 | Completion × implicit | Bare long/short ordinary implicit occurrences consume no following completion word. |

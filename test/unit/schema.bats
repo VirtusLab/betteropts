@@ -391,7 +391,7 @@ Line two.
   option e -e --e E type=directory
   option f -f --f F type=choice choices=x,y
   option g -g --g G type=git-commitish
-  option h -h --h H type=git-range
+  option h -z --h H type=git-range
   run _bo_finalize_schema
   assert_success
 }
